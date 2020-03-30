@@ -9,7 +9,7 @@ import java.io.Serializable;
 
 @Component
 @ConfigurationProperties(prefix = "hbase")
-@PropertySource("classpath: blaze.properties")
+@PropertySource("classpath:customParameter.properties")
 @Configuration
 public class HbaseConfigMessage implements Serializable {
 

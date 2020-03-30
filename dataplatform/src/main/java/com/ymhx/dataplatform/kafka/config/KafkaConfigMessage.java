@@ -1,7 +1,6 @@
 package com.ymhx.dataplatform.kafka.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.stereotype.Component;
@@ -10,7 +9,7 @@ import java.io.Serializable;
 
 @Component
 @ConfigurationProperties(prefix = "kafka")
-@PropertySource("classpath: blaze.properties")
+@PropertySource("classpath:customParameter.properties")
 @Configuration
 public class KafkaConfigMessage implements Serializable {
 
