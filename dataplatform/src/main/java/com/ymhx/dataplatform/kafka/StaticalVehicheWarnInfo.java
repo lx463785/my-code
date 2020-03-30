@@ -1,6 +1,7 @@
 package com.ymhx.dataplatform.kafka;
 
 import com.ymhx.dataplatform.kafka.config.HbaseConfigMessage;
+import com.ymhx.dataplatform.kafka.untils.ADASEnum;
 import com.ymhx.dataplatform.kafka.untils.DateUtils;
 import com.ymhx.dataplatform.kafka.untils.JdbcUtils;
 import org.apache.commons.lang.StringUtils;
@@ -15,15 +16,20 @@ import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.Function2;
 import org.apache.spark.api.java.function.PairFunction;
+import org.apache.spark.api.java.function.VoidFunction;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import scala.Tuple2;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.text.ParseException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 
@@ -45,13 +51,16 @@ public class StaticalVehicheWarnInfo implements Serializable {
                 .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
 
         JavaSparkContext context = new JavaSparkContext(conf);
-        //hbase配置
+
+        //查询配置信息
+        List<String>  configlist = new ArrayList<>();
 
         //获取所有车辆的terminal_id
-        List<Integer> list = new JdbcUtils().getterminalID();
-        for (Integer terminalId : list) {
+        List<String> list = new JdbcUtils().getterminalID();
+        for (String terminalId : list) {
             //倒序
-            String reverseId = StringUtils.reverse((""+terminalId));
+            String reverseId = StringUtils.reverse((terminalId));
+            //hbase配置
             Configuration hconf = HBaseConfiguration.create();
             hconf.set("hbase.zookeeper.quorum","192.168.0.95:2181,192.168.0.46:2181,192.168.0.202:2181");
             hconf.set("hbase.zookeeper.property.clientPort", "2181");
@@ -64,28 +73,63 @@ public class StaticalVehicheWarnInfo implements Serializable {
             hconf.set(TableInputFormat.SCAN_ROW_START,String.format("%s%s", reverseId,  DateUtils.getBeforeOneDay().get("startTime")));
             hconf.set(TableInputFormat.SCAN_ROW_STOP,String.format("%s%s", reverseId, DateUtils.getBeforeOneDay().get("endTime")));
 
+           //查询终端id为terminalId的车辆信息
+
+            List<String> run = new JdbcUtils().run(terminalId);
+
             JavaPairRDD<ImmutableBytesWritable, Result> javaPairRDD = context.newAPIHadoopRDD(hconf, TableInputFormat.class, ImmutableBytesWritable.class, Result.class);
 
-            JavaPairRDD<String, Integer> stringIntegerJavaPairRDD = javaPairRDD.mapToPair(new PairFunction<Tuple2<ImmutableBytesWritable, Result>, String, Integer>() {
+            JavaPairRDD<String, Integer> integerJavaPairRDD = javaPairRDD.mapToPair(new PairFunction<Tuple2<ImmutableBytesWritable, Result>, String, Integer>() {
                 @Override
                 public Tuple2<String, Integer> call(Tuple2<ImmutableBytesWritable, Result> immutableBytesWritableResultTuple2) throws Exception {
                     Result result = immutableBytesWritableResultTuple2._2();
+                    //获取每个车辆的报警类型
+                    int alarmType = Bytes.toInt(result.getValue("alarm".getBytes(), "alarmType".getBytes()));
+                    //获取每个车辆的终端ID
+                    int terminalId = Bytes.toInt(result.getValue("alarm".getBytes(), "terminalId".getBytes()));
 
-                    byte[] value = result.getValue("alarm".getBytes(), "alarmType".getBytes());
-                    String s1 = Bytes.toString(value);
-                    System.out.println(s1);
-//                    Integer integer = Integer.valueOf(String.valueOf(result.getValue("alarm".getBytes(), "alarmType".getBytes())));
-//                    System.out.println(integer);
-                    System.out.println("---------------------");
-                String s = new String(immutableBytesWritableResultTuple2._2().getValue("gps".getBytes(), "terminalId".getBytes()));
-                System.out.println(s);
-                    System.out.println("--------------------");
+                    return new Tuple2<>(terminalId + "_" + alarmType, 1);
+                }
+            }).reduceByKey(new Function2<Integer, Integer, Integer>() {
+                @Override
+                public Integer call(Integer integer, Integer integer2) throws Exception {
+                    return integer + integer2;
+                }
+            });
+            integerJavaPairRDD.mapToPair(new PairFunction<Tuple2<String, Integer>, String, Float>() {
+                @Override
+                public Tuple2<String, Float> call(Tuple2<String, Integer> stringIntegerTuple2) throws Exception {
+                    float speed = Float.parseFloat(configlist.get(0));
+                    BigDecimal myspeed = BigDecimal.valueOf(speed);
+                    List<String> splitlist = Arrays.asList(stringIntegerTuple2._1.split("_"));
+                    //碰撞类型
+                    int alarmtype = Integer.parseInt(splitlist.get(1));
+                    //终端ID
+                    String terminalID = splitlist.get(0);
+                    //车辆的速度
+                    float currentspeed = Float.parseFloat(run.get(2));
+                    BigDecimal current0fspeed = BigDecimal.valueOf(speed);
+                    float allmark = 0;
+                    if (alarmtype==ADASEnum.FCW.getVaule()){
+//                        if ()
+                    }
                     return null;
                 }
             });
-            long count = stringIntegerJavaPairRDD.count();
-            System.out.println("---------------------");
-            System.out.println(count);
+            integerJavaPairRDD.foreach(new VoidFunction<Tuple2<String, Integer>>() {
+                @Override
+                public void call(Tuple2<String, Integer> stringIntegerTuple2) throws Exception {
+                    // 车辆的vehicleid
+                    String vehicleid = list.get(3);
+                    // 车辆的车牌号
+                    String number_plate = list.get(1);
+                    //车辆的组
+                    String vehicle_group = list.get(list.size() - 1);
+                }
+            });
+//            long count = stringIntegerJavaPairRDD.count();
+//            System.out.println("---------------------");
+//            System.out.println(count);
         }
 
     }

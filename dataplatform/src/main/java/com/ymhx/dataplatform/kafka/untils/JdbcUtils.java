@@ -10,18 +10,16 @@ import java.util.List;
 @Component
 public class JdbcUtils {
     @Transient
-    public List<Integer>   run(String sql) throws SQLException {
+    public List<String>   run(String sql) throws SQLException {
         Connection connection = ConnectionPool.getConnection();
-//        Statement statement = connection.createStatement();
-//        statement.execute(sql);
         PreparedStatement pstmt = null;
-        List<Integer> list = new ArrayList<>();
+        List<String> list = new ArrayList<>();
         try {
             connection.setAutoCommit(false);
             pstmt = connection.prepareStatement(sql);
             ResultSet rs = pstmt.executeQuery();
             while (rs.next()){
-                int terminalID = Integer.parseInt(rs.getString(1));
+                String terminalID = rs.getString(1);
                 list.add(terminalID);
             }
         }catch (SQLException e){
@@ -63,10 +61,19 @@ public class JdbcUtils {
     /**
      * 获取曹操专车的车辆的termid(写死了的)
      */
-    public  List<Integer> getterminalID() throws SQLException {
+    public  List<String> getterminalID() throws SQLException {
         String sql = "SELECT ve.terminal_id from tb_vehicle ve LEFT JOIN vehicle_group gp ON ve.vehicle_group=gp.`\uFEFFID` WHERE gp.SuperiorID='100118'";
-        List<Integer> terminalIds = run(sql);
+        List<String> terminalIds = run(sql);
         return terminalIds;
     }
 
+    /**
+     * 获取曹操专车的某个termid的所有数据
+     */
+    public List<String> getTerminalData(String terminalid) throws SQLException {
+        String sql =  "SELECT * from tb_vehicle WHERE terminal_id=%s ";
+        sql= String.format(sql,terminalid);
+        List<String> list = run(sql);
+        return list;
+    }
 }
