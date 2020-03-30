@@ -69,9 +69,11 @@ public class StaticalVehicheWarnInfo implements Serializable {
                 @Override
                 public Tuple2<String, Integer> call(Tuple2<ImmutableBytesWritable, Result> immutableBytesWritableResultTuple2) throws Exception {
                     Result result = immutableBytesWritableResultTuple2._2;
+                    Integer integer = Integer.valueOf(String.valueOf(result.getValue("alarm".getBytes(), "alarmType".getBytes())));
+                    System.out.println(integer);
                     System.out.println("---------------------");
-//                String s = new String(immutableBytesWritableResultTuple2._2().getValue("gps".getBytes(), "terminalId".getBytes()));
-//                System.out.println(s);
+                String s = new String(immutableBytesWritableResultTuple2._2().getValue("gps".getBytes(), "terminalId".getBytes()));
+                System.out.println(s);
                     System.out.println("--------------------");
                     return null;
                 }
