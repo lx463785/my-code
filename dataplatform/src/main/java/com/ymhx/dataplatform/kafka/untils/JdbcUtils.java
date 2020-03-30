@@ -22,17 +22,13 @@ public class JdbcUtils {
 
             while (rs.next()){
                 int columnCount = rs.getMetaData().getColumnCount();
-                for (int i = 1; i <columnCount ; i++) {
+                for (int i = 1; i <=columnCount ; i++) {
                 String terminalID = rs.getString(i);
                 list.add(terminalID);
                 }
             }
         }catch (SQLException e){
-            try {
-                connection.rollback();
-            }catch (SQLException e1){
-                e1.printStackTrace();
-            }
+           e.printStackTrace();
         }finally {
                 JdbcPoolUtils.close(rs,pstmt,connection);
         }
