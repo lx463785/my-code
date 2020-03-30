@@ -4,9 +4,9 @@ package com.ymhx.dataplatform;
 import com.ymhx.dataplatform.kafka.KafkaMesConsumer;
 import com.ymhx.dataplatform.kafka.StaticalVehicheWarnInfo;
 
+import com.ymhx.dataplatform.kafka.StatictalVehicheInformation;
 import com.ymhx.dataplatform.kafka.test.KfkaProducer;
-import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.DeleteTopicsResult;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,9 +16,7 @@ import org.springframework.test.context.junit4.SpringRunner;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.text.ParseException;
-import java.util.ArrayList;
-import java.util.Properties;
-import java.util.concurrent.ExecutionException;
+
 
 @RunWith(SpringRunner.class)
 @SpringBootTest
@@ -28,8 +26,8 @@ public class KafkaTest {
         private KafkaMesConsumer kafkaConsumer;
         @Autowired
         private KfkaProducer kfkaProducer;
-//        @Autowired
-//        private StatictalVehicheInformation statictalVehicheInformation;
+        @Autowired
+        private StatictalVehicheInformation statictalVehicheInformation;
         @Autowired
         private StaticalVehicheWarnInfo staticalVehicheWarnInfo;
 
@@ -66,19 +64,19 @@ public class KafkaTest {
         public  void  dmscopy(){
                 kafkaConsumer.getlogin();
         }
-//        @Test
-//        public  void  getcount(){
-//                statictalVehicheInformation.getCountAlarmInformation();
-//        }
-//
-//        @Test
-//        public  void  getReportMes() throws IOException, SQLException {
-//                statictalVehicheInformation.getMes();
-//        }
-//        @Test
-//        public  void  getWarnCoefficient() throws IOException, SQLException, ParseException {
-//                staticalVehicheWarnInfo.getWarnCoefficient();
-//        }
+        @Test
+        public  void  getcount(){
+                statictalVehicheInformation.getCountAlarmInformation();
+        }
+
+        @Test
+        public  void  getReportMes() throws IOException, SQLException {
+                statictalVehicheInformation.getMes();
+        }
+        @Test
+        public  void  getWarnCoefficient() throws IOException, SQLException, ParseException {
+                staticalVehicheWarnInfo.getWarnCoefficient();
+        }
 
 }
 

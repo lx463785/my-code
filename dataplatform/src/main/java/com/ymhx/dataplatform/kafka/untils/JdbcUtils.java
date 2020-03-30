@@ -11,16 +11,21 @@ import java.util.List;
 public class JdbcUtils {
     @Transient
     public List<String>   run(String sql) throws SQLException {
-        Connection connection = ConnectionPool.getConnection();
+        Connection connection = JdbcPoolUtils.getConnection();
         PreparedStatement pstmt = null;
         List<String> list = new ArrayList<>();
+        ResultSet rs=null;
         try {
             connection.setAutoCommit(false);
             pstmt = connection.prepareStatement(sql);
-            ResultSet rs = pstmt.executeQuery();
+            rs = pstmt.executeQuery();
+
             while (rs.next()){
-                String terminalID = rs.getString(1);
+                int columnCount = rs.getMetaData().getColumnCount();
+                for (int i = 1; i <columnCount ; i++) {
+                String terminalID = rs.getString(i);
                 list.add(terminalID);
+                }
             }
         }catch (SQLException e){
             try {
@@ -29,33 +34,10 @@ public class JdbcUtils {
                 e1.printStackTrace();
             }
         }finally {
-            closeJDBC(null, pstmt, connection);
+                JdbcPoolUtils.close(rs,pstmt,connection);
         }
         return list;
 
-    }
-    public static void closeJDBC(ResultSet rs, Statement stmt, Connection conn) {
-        if (rs != null) {
-            try {
-                rs.close();
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        }
-        if (stmt != null) {
-            try {
-                stmt.close();
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        }
-        if (conn != null) {
-            try {
-                conn.close();
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        }
     }
 
     /**
@@ -67,6 +49,14 @@ public class JdbcUtils {
         return terminalIds;
     }
 
+    /**
+     * 获取曹操专车的车辆配置信息(写死了的)
+     */
+    public  List<String> getconfiglist() throws SQLException {
+        String sql = "SELECT * from adassetting WHERE GroupID='100118'";
+        List<String> terminalIds = run(sql);
+        return terminalIds;
+    }
     /**
      * 获取曹操专车的某个termid的所有数据
      */

@@ -53,7 +53,7 @@ public class StaticalVehicheWarnInfo implements Serializable {
         JavaSparkContext context = new JavaSparkContext(conf);
 
         //查询配置信息
-        List<String>  configlist = new ArrayList<>();
+        List<String>  configlist = new JdbcUtils().getconfiglist();
 
         //获取所有车辆的terminal_id
         List<String> list = new JdbcUtils().getterminalID();
@@ -75,18 +75,18 @@ public class StaticalVehicheWarnInfo implements Serializable {
 
            //查询终端id为terminalId的车辆信息
 
-            List<String> run = new JdbcUtils().run(terminalId);
+            List<String> run = new JdbcUtils().getTerminalData(terminalId);
 
             JavaPairRDD<ImmutableBytesWritable, Result> javaPairRDD = context.newAPIHadoopRDD(hconf, TableInputFormat.class, ImmutableBytesWritable.class, Result.class);
 
-            JavaPairRDD<String, Integer> integerJavaPairRDD = javaPairRDD.mapToPair(new PairFunction<Tuple2<ImmutableBytesWritable, Result>, String, Integer>() {
+            JavaPairRDD<String, Double> stringDoubleJavaPairRDD = javaPairRDD.mapToPair(new PairFunction<Tuple2<ImmutableBytesWritable, Result>, String, Integer>() {
                 @Override
                 public Tuple2<String, Integer> call(Tuple2<ImmutableBytesWritable, Result> immutableBytesWritableResultTuple2) throws Exception {
                     Result result = immutableBytesWritableResultTuple2._2();
                     //获取每个车辆的报警类型
-                    int alarmType = Bytes.toInt(result.getValue("alarm".getBytes(), "alarmType".getBytes()));
+                    String alarmType = Bytes.toString(result.getValue("alarm".getBytes(), "alarmType".getBytes()));
                     //获取每个车辆的终端ID
-                    int terminalId = Bytes.toInt(result.getValue("alarm".getBytes(), "terminalId".getBytes()));
+                    String terminalId = Bytes.toString(result.getValue("alarm".getBytes(), "terminalId".getBytes()));
 
                     return new Tuple2<>(terminalId + "_" + alarmType, 1);
                 }
@@ -95,10 +95,9 @@ public class StaticalVehicheWarnInfo implements Serializable {
                 public Integer call(Integer integer, Integer integer2) throws Exception {
                     return integer + integer2;
                 }
-            });
-            integerJavaPairRDD.mapToPair(new PairFunction<Tuple2<String, Integer>, String, Float>() {
+            }).mapToPair(new PairFunction<Tuple2<String, Integer>, String, Double>() {
                 @Override
-                public Tuple2<String, Float> call(Tuple2<String, Integer> stringIntegerTuple2) throws Exception {
+                public Tuple2<String, Double> call(Tuple2<String, Integer> stringIntegerTuple2) throws Exception {
                     float speed = Float.parseFloat(configlist.get(0));
                     BigDecimal myspeed = BigDecimal.valueOf(speed);
                     List<String> splitlist = Arrays.asList(stringIntegerTuple2._1.split("_"));
@@ -110,15 +109,15 @@ public class StaticalVehicheWarnInfo implements Serializable {
                     float currentspeed = Float.parseFloat(run.get(2));
                     BigDecimal current0fspeed = BigDecimal.valueOf(speed);
                     float allmark = 0;
-                    if (alarmtype==ADASEnum.FCW.getVaule()){
+                    if (alarmtype == ADASEnum.FCW.getVaule()) {
 //                        if ()
                     }
                     return null;
                 }
             });
-            integerJavaPairRDD.foreach(new VoidFunction<Tuple2<String, Integer>>() {
+            stringDoubleJavaPairRDD.foreach(new VoidFunction<Tuple2<String, Double>>() {
                 @Override
-                public void call(Tuple2<String, Integer> stringIntegerTuple2) throws Exception {
+                public void call(Tuple2<String, Double> stringIntegerTuple2) throws Exception {
                     // 车辆的vehicleid
                     String vehicleid = list.get(3);
                     // 车辆的车牌号
