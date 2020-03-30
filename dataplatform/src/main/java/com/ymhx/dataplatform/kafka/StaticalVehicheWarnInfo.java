@@ -11,6 +11,7 @@ import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.io.ImmutableBytesWritable;
 import org.apache.hadoop.hbase.mapreduce.TableInputFormat;
 import org.apache.hadoop.hbase.mapreduce.TableMapReduceUtil;
+import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -68,9 +69,13 @@ public class StaticalVehicheWarnInfo implements Serializable {
             JavaPairRDD<String, Integer> stringIntegerJavaPairRDD = javaPairRDD.mapToPair(new PairFunction<Tuple2<ImmutableBytesWritable, Result>, String, Integer>() {
                 @Override
                 public Tuple2<String, Integer> call(Tuple2<ImmutableBytesWritable, Result> immutableBytesWritableResultTuple2) throws Exception {
-                    Result result = immutableBytesWritableResultTuple2._2;
-                    Integer integer = Integer.valueOf(String.valueOf(result.getValue("alarm".getBytes(), "alarmType".getBytes())));
-                    System.out.println(integer);
+                    Result result = immutableBytesWritableResultTuple2._2();
+
+                    byte[] value = result.getValue("alarm".getBytes(), "alarmType".getBytes());
+                    String s1 = Bytes.toString(value);
+                    System.out.println(s1);
+//                    Integer integer = Integer.valueOf(String.valueOf(result.getValue("alarm".getBytes(), "alarmType".getBytes())));
+//                    System.out.println(integer);
                     System.out.println("---------------------");
                 String s = new String(immutableBytesWritableResultTuple2._2().getValue("gps".getBytes(), "terminalId".getBytes()));
                 System.out.println(s);
