@@ -45,12 +45,29 @@ public class DateUtils implements Serializable {
     }
 
     /**
+     * 获取当前时间
+     */
+    public static Map<String, String> getcurrentTime() throws ParseException {
+
+        DateFormat dateFmt = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+
+        Date dNow = new Date(); //当前时间
+
+
+        String defaultStartDate = dateFmt.format(dNow);
+
+        defaultStartDate = defaultStartDate.substring(0,10)+" 00:00:00";
+
+        String defaultEndDate = defaultStartDate.substring(0,10)+" 23:59:59";
+        Map<String,String> map = new HashMap<>();
+        map.put("startTime",defaultStartDate);
+        map.put("endTime",defaultEndDate);
+        return map;
+    }
+    /**
      *
      * @param args
      */
 
-    public static void main(String[] args) throws ParseException {
-        Map<String, Long> beforeOneDay = new DateUtils().getBeforeOneDay();
-        System.out.println(beforeOneDay);
-    }
+
 }

@@ -1,40 +1,122 @@
 package com.ymhx.dataplatform.kafka.untils;
 
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.beans.Transient;
 import java.sql.*;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
 @Component
 public class JdbcUtils {
-    @Transient
+
     public List<String>   run(String sql) throws SQLException {
-        Connection connection = JdbcPoolUtils.getConnection();
+        DateFormat dateFmt = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        Connection connection = DBUtils.getDataSource().getConnection();
         PreparedStatement pstmt = null;
         List<String> list = new ArrayList<>();
         ResultSet rs=null;
         try {
-            connection.setAutoCommit(false);
             pstmt = connection.prepareStatement(sql);
             rs = pstmt.executeQuery();
-
             while (rs.next()){
                 int columnCount = rs.getMetaData().getColumnCount();
                 for (int i = 1; i <=columnCount ; i++) {
-                String terminalID = rs.getString(i);
-                list.add(terminalID);
+                    String columnTypeName = rs.getMetaData().getColumnTypeName(i);//表字段类型
+                    if ("DATETIME".equals(columnTypeName)){
+//                        Time timestamp = rs.getTime(i);
+//                        String format = dateFmt.format(timestamp);
+//                        list.add(format);
+                        continue;
+                    }else {
+                        String terminalID = rs.getString(i);
+                        list.add(terminalID);
+                    }
                 }
             }
         }catch (SQLException e){
            e.printStackTrace();
         }finally {
-                JdbcPoolUtils.close(rs,pstmt,connection);
+            connection.close();
+            pstmt.close();
+           rs.close();
+
         }
         return list;
 
     }
+
+
+    public List<String> query(String sql,Integer id,String starttime,String endtime) throws SQLException {
+
+        Connection connection = DBUtils.getDataSource().getConnection();
+        PreparedStatement pstmt = null;
+        ResultSet rs=null;
+        List<String> list = new ArrayList<>();
+        try {
+            pstmt = connection.prepareStatement(sql);
+            pstmt.setInt(1,id);
+            pstmt.setString(2,starttime);
+            pstmt.setString(3,endtime);
+            rs = pstmt.executeQuery();
+            while (rs.next()){
+                //获取id数据
+                int columnCount = rs.getMetaData().getColumnCount();
+                if (columnCount>0){
+                    String reportid = rs.getString(1);
+                    list.add(reportid);
+                    String risk = rs.getString(7);
+                    list.add(risk);
+                }
+            }
+
+        }catch (SQLException e){
+            e.printStackTrace();
+        }finally {
+            connection.close();
+            pstmt.close();
+            rs.close();
+
+        }
+        return  list;
+
+    }
+
+
+    @Transactional
+    public  void   save(String sql, Integer terminalid, String making, String date) throws SQLException {
+        Connection connection = DBUtils.getDataSource().getConnection();
+        PreparedStatement stmt = null;
+        try {
+            stmt = connection.prepareStatement(sql);
+            stmt.setString(1,making);
+            stmt.setString(2,date);
+            stmt.setInt(3,terminalid);
+            int i = stmt.executeUpdate();
+            //处理结果
+            if(i>0){
+
+                System.out.println("stmt插入数据成功");
+
+            }else{
+
+                System.out.println("stmt插入数据失败");
+            }
+            stmt.addBatch();
+        }catch (SQLException e){
+            e.printStackTrace();
+        }finally {
+           connection.close();
+           stmt.close();
+        }
+
+
+    }
+
 
     /**
      * 获取曹操专车的车辆的termid(写死了的)

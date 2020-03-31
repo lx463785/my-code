@@ -5,5 +5,3 @@ server:
 bigdata:
   config:
     hBaseConfigMap: {hbase.zookeeper.quorum : '192.168.0.95:2181','192.168.0.46:2181','192.168.0.202:2181'}
-
-
