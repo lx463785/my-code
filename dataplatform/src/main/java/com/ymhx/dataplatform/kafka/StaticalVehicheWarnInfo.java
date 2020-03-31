@@ -177,7 +177,7 @@ public class StaticalVehicheWarnInfo implements Serializable {
           }).foreach(new VoidFunction<Tuple2<String, String>>() {
               @Override
               public void call(Tuple2<String, String> stringStringTuple2) throws Exception {
-                  DateFormat dateFmt = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
+                  DateFormat dateFmt = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
                     //向mysql插入统计数据
                   String sql = "insert into tb_vehicle_report  (terminal_id,warn_risk,create_time) values ('%s',%s,'%s')";
                   sql =String.format(sql,Integer.parseInt(terminalId),Double.parseDouble(stringStringTuple2._2),dateFmt.parse(dateFmt.format(new Date())));
