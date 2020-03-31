@@ -20,6 +20,7 @@ import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.Function2;
 import org.apache.spark.api.java.function.PairFunction;
 import org.apache.spark.api.java.function.VoidFunction;
+import org.codehaus.janino.IClass;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import scala.Tuple2;
@@ -146,25 +147,30 @@ public class StaticalVehicheWarnInfo implements Serializable {
           }).reduceByKey(new Function2<String, String, String>() {
               @Override
               public String call(String s, String s2) throws Exception {
-                  List<String> values = Arrays.asList(s2.split("_"));
-                  int alarmtype = Integer.parseInt(values.get(0));
-                  List<String> values1 = Arrays.asList(s.split("_"));
-                  int alarmtype1 = Integer.parseInt(values1.get(0));
                   Double making =0.00;
-                  //对前碰撞 车道偏移 车距检测省基数
-                  if (alarmtype==ADASEnum.FCW.getVaule()){
-                    making+= Double.parseDouble( values.get(1))*Double.valueOf(configlist.get(5));
-                  }else if (alarmtype==ADASEnum.LDW.getVaule()||alarmtype==ADASEnum.LDWR.getVaule()){
-                      making+= Double.parseDouble( values.get(1))*Double.valueOf(configlist.get(9));
-                  }else if (alarmtype==ADASEnum.HMW.getVaule()){
-                      making+= Double.parseDouble( values.get(1))*Double.valueOf(configlist.get(14));
+                  if (s2.contains("_")){
+                  List<String> values = Arrays.asList(s2.split("_"));
+                      int alarmtype = Integer.parseInt(values.get(0));
+                      //对前碰撞 车道偏移 车距检测省基数
+                      if (alarmtype==ADASEnum.FCW.getVaule()){
+                          making+= Double.parseDouble( values.get(1))*Double.valueOf(configlist.get(5));
+                      }else if (alarmtype==ADASEnum.LDW.getVaule()||alarmtype==ADASEnum.LDWR.getVaule()){
+                          making+= Double.parseDouble( values.get(1))*Double.valueOf(configlist.get(9));
+                      }else if (alarmtype==ADASEnum.HMW.getVaule()){
+                          making+= Double.parseDouble( values.get(1))*Double.valueOf(configlist.get(14));
+                      }
                   }
-                  if (alarmtype1==ADASEnum.FCW.getVaule()){
-                      making+= Double.parseDouble( values.get(1))*Double.valueOf(configlist.get(5));
-                  }else if (alarmtype1==ADASEnum.LDW.getVaule()||alarmtype1==ADASEnum.LDWR.getVaule()){
-                      making+= Double.parseDouble( values.get(1))*Double.valueOf(configlist.get(9));
-                  }else if (alarmtype1==ADASEnum.HMW.getVaule()){
-                      making+= Double.parseDouble( values.get(1))*Double.valueOf(configlist.get(14));
+
+                  if (s.contains("_")){
+                      List<String> values1 = Arrays.asList(s.split("_"));
+                      int alarmtype1 = Integer.parseInt(values1.get(0));
+                      if (alarmtype1==ADASEnum.FCW.getVaule()){
+                          making+= Double.parseDouble( values1.get(1))*Double.valueOf(configlist.get(5));
+                      }else if (alarmtype1==ADASEnum.LDW.getVaule()||alarmtype1==ADASEnum.LDWR.getVaule()){
+                          making+= Double.parseDouble( values1.get(1))*Double.valueOf(configlist.get(9));
+                      }else if (alarmtype1==ADASEnum.HMW.getVaule()){
+                          making+= Double.parseDouble( values1.get(1))*Double.valueOf(configlist.get(14));
+                      }
                   }
                   return String .valueOf(making );
               }
