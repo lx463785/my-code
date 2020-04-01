@@ -62,9 +62,11 @@ public class StaticalVehicheWarnInfo implements Serializable {
         //获取所有车辆的terminal_id
         List<String> list = new JdbcUtils().getterminalID();
         for (String vehicleid : list) {
+            //查询终端id为terminalId的车辆信息
+            List<String> run = new JdbcUtils().getTerminalData(vehicleid);
             //倒序
-            //todo 补0
-            String reverseId = StringUtils.reverse((vehicleid));
+            String reverseId = StringUtils.reverse((run.get(6)));
+
             //hbase配置
             Configuration hconf = HBaseConfiguration.create();
             hconf.set("hbase.zookeeper.quorum","192.168.0.95:2181,192.168.0.46:2181,192.168.0.202:2181");
@@ -78,8 +80,7 @@ public class StaticalVehicheWarnInfo implements Serializable {
             hconf.set(TableInputFormat.SCAN_ROW_START,String.format("%s%s", reverseId,  DateUtils.getBeforeOneDay().get("startTime")));
             hconf.set(TableInputFormat.SCAN_ROW_STOP,String.format("%s%s", reverseId, DateUtils.getBeforeOneDay().get("endTime")));
 
-           //查询终端id为terminalId的车辆信息
-            List<String> run = new JdbcUtils().getTerminalData(vehicleid);
+
             //设置标识符
             //获取符合查询的hbase相应信息
             JavaPairRDD<ImmutableBytesWritable, Result> javaPairRDD = context.newAPIHadoopRDD(hconf, TableInputFormat.class, ImmutableBytesWritable.class, Result.class);
@@ -216,7 +217,7 @@ public class StaticalVehicheWarnInfo implements Serializable {
                     int vehicleId = Integer.parseInt(vehicleid);
                     DateFormat dateFmt = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
                     //查询是否有该数据
-                    String querysql = "SELECT * from tb_vehicle_report WHERE vehicleId=? AND create_time>? AND create_time<=? ";
+                    String querysql = "SELECT * from tb_vehicle_report WHERE vehicle_id=? AND create_time>? AND create_time<=? ";
                     querysql= String.format(querysql, vehicleId, DateUtils.getBeforeOneDay().get("startTime"), DateUtils.getBeforeOneDay().get("endTime"));
                     List<String> query = new JdbcUtils().query(querysql,vehicleId,DateUtils.getcurrentTime().get("startTime"),DateUtils.getcurrentTime().get("endTime"));
                     if (query.size()==0){
@@ -264,6 +265,90 @@ public class StaticalVehicheWarnInfo implements Serializable {
                     return new Tuple2<>(newlist.get(0), newlist.get(1) + "_" + stringIntegerTuple2._2);
                 }
             });
+
+            JavaPairRDD<String, Tuple2<String, String>> join = pairRDD.join(newrdd);
+            join.foreach(new VoidFunction<Tuple2<String, Tuple2<String, String>>>() {
+                @Override
+                public void call(Tuple2<String, Tuple2<String, String>> stringTuple2Tuple2) throws Exception {
+                    System.out.println(stringTuple2Tuple2._2._1);
+                    System.out.println(stringTuple2Tuple2._1);
+                    List<String> newlist = Arrays.asList(stringTuple2Tuple2._2._2.split("_"));
+                    int type = Integer.parseInt(newlist.get(0));
+                    int counts = Integer.parseInt(newlist.get(1));
+
+                    //插入报警信息
+                    String sql ="update tb_vehicle_report set %s=?  where vehicle_id=? and create_time>? and create_time<? ";
+                    String name = "";
+                    if (ADASEnum.FCW.getVaule()==type){  //前碰撞
+                        name="fwc";
+                    }else if (ADASEnum.UFCW.getVaule()==type){//低速前碰撞
+                        name="ufcw";
+                    }else if (ADASEnum.LDW.getVaule()==type){
+                        name="ldw";
+                    }else if (ADASEnum.LDWR.getVaule()==type){
+                        name="rdw";
+                    }else if (ADASEnum.HMW.getVaule()==type){
+                        name="hmw";
+                    }else if (ADASEnum.PCW.getVaule()==type){
+                        name="pcw";
+                    }else if (ADASEnum.FFW.getVaule()==type){
+                        name="failure";
+                    }else if (ADASEnum.TSR.getVaule()==type){
+                        name="transfinite";
+                    }
+                    if (StringUtils.isNotBlank(name)) {
+                        sql = String.format(sql, name);
+                        new JdbcUtils().save(sql,String.valueOf(counts),vehicleid, DateUtils.getcurrentTime().get("startTime"), DateUtils.getcurrentTime().get("endTime"));
+                    }
+                }
+
+            });
+
+        }
+
+    }
+
+    /**
+     * 计算里程
+     *
+     */
+    public void  getMileageCount() throws SQLException, ParseException, IOException {
+        SparkConf conf = new SparkConf().setAppName("warn")
+                .setMaster("local[2]")
+                //序列化
+                .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
+
+        JavaSparkContext context = new JavaSparkContext(conf);
+
+
+        //获取所有车辆的terminal_id
+        List<String> list = new JdbcUtils().getterminalID();
+        for (String vehicleid : list) {
+            //倒序
+
+            String reverseId = StringUtils.reverse((vehicleid));
+            reverseId = String.format("%-14s", reverseId).replace(' ', '0');
+            //hbase配置
+            Configuration hconf = HBaseConfiguration.create();
+            hconf.set("hbase.zookeeper.quorum","192.168.0.95:2181,192.168.0.46:2181,192.168.0.202:2181");
+            hconf.set("hbase.zookeeper.property.clientPort", "2181");
+            hconf.set(TableInputFormat.INPUT_TABLE, "vehicle_alarm_adas");
+
+            Scan scan = new Scan();
+            Long startTime = DateUtils.getBeforeOneDay().get("startTime");
+            Long endTime = DateUtils.getBeforeOneDay().get("endTime");
+            scan.setStartRow(String.format("%s%s", reverseId, startTime).getBytes());
+            scan.setStopRow(String.format("%s%s", reverseId, endTime).getBytes());
+            hconf.set(TableInputFormat.SCAN, TableMapReduceUtil.convertScanToString(scan));
+            hconf.set(TableInputFormat.SCAN_ROW_START,String.format("%s%s", reverseId,  startTime));
+            hconf.set(TableInputFormat.SCAN_ROW_STOP,String.format("%s%s", reverseId, endTime));
+
+            //查询终端id为terminalId的车辆信息
+            List<String> run = new JdbcUtils().getTerminalData(vehicleid);
+            //设置标识符
+            //获取符合查询的hbase相应信息
+            JavaPairRDD<ImmutableBytesWritable, Result> javaPairRDD = context.newAPIHadoopRDD(hconf, TableInputFormat.class, ImmutableBytesWritable.class, Result.class);
+            long count = javaPairRDD.count();
             //统计公里数
             JavaPairRDD<String, Double> mileagerdd = javaPairRDD.mapToPair(new PairFunction<Tuple2<ImmutableBytesWritable, Result>, Integer, String>() {
                 @Override
@@ -336,46 +421,17 @@ public class StaticalVehicheWarnInfo implements Serializable {
                     return new Tuple2<>(integerIterableTuple2._1.toString(), odd);
                 }
             });
-            JavaPairRDD<String, Tuple2<Tuple2<String, String>, Double>> join = pairRDD.join(newrdd).join(mileagerdd);
-            join.foreach(new VoidFunction<Tuple2<String, Tuple2<Tuple2<String, String>, Double>>>() {
+            mileagerdd.foreach(new VoidFunction<Tuple2<String, Double>>() {
                 @Override
-                public void call(Tuple2<String, Tuple2<Tuple2<String, String>, Double>> stringTuple2Tuple2) throws Exception {
-                    System.out.println(stringTuple2Tuple2._2._1);
-                    System.out.println(stringTuple2Tuple2._1);
-                    List<String> newlist = Arrays.asList(stringTuple2Tuple2._2._1._2.split("_"));
-                    int type = Integer.parseInt(newlist.get(0));
-                    int counts = Integer.parseInt(newlist.get(1));
-                    //公里数
-                    Double mileage = stringTuple2Tuple2._2._2;
-                    //插入报警信息
-                    String sql ="update tb_vehicle_report set %s=? mileage+=? where vehicle_id=? and create_time>? and create_time<? ";
-                    String name = "";
-                    if (ADASEnum.FCW.getVaule()==type){  //前碰撞
-                        name="fwc";
-                    }else if (ADASEnum.UFCW.getVaule()==type){//低速前碰撞
-                        name="ufcw";
-                    }else if (ADASEnum.LDW.getVaule()==type){
-                        name="ldw";
-                    }else if (ADASEnum.LDWR.getVaule()==type){
-                        name="rdw";
-                    }else if (ADASEnum.HMW.getVaule()==type){
-                        name="hmw";
-                    }else if (ADASEnum.PCW.getVaule()==type){
-                        name="pcw";
-                    }else if (ADASEnum.FFW.getVaule()==type){
-                        name="failure";
-                    }else if (ADASEnum.TSR.getVaule()==type){
-                        name="transfinite";
-                    }
-                    if (StringUtils.isNotBlank(name)) {
-                        sql = String.format(sql, name);
-                        new JdbcUtils().save(sql, Integer.parseInt(vehicleid), counts, DateUtils.getcurrentTime().get("startTime"), DateUtils.getcurrentTime().get("endTime"),mileage);
-                    }
-                 }
-
+                public void call(Tuple2<String, Double> stringDoubleTuple2) throws Exception {
+                    DateFormat dateFmt = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+                    //格式化日期
+                    String start = dateFmt.format(startTime);
+                    String end = dateFmt.format(endTime);
+                    String sql ="update tb_vehicle_report set mileage=?  where vehicle_id=? and create_time>? and create_time<? ";
+                    new JdbcUtils().save(sql, String.valueOf(stringDoubleTuple2._2),stringDoubleTuple2._1,  start, end);
+                }
             });
-
         }
-
     }
 }

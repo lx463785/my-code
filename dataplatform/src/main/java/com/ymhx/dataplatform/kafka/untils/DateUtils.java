@@ -65,5 +65,9 @@ public class DateUtils implements Serializable {
      *
      * @param args
      */
+    public static void main(String[] args) {
 
+        Integer a = 12;
+        System.out.println(String.format("%-10s", a).replace(' ', '0'));
+    }
 }

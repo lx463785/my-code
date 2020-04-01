@@ -8,7 +8,6 @@ import java.sql.*;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 
 @Component
@@ -27,7 +26,9 @@ public class JdbcUtils {
                 int columnCount = rs.getMetaData().getColumnCount();
                 for (int i = 1; i <=columnCount ; i++) {
                     String columnTypeName = rs.getMetaData().getColumnTypeName(i);//表字段类型
-
+                        if ("DATETIME".equals(columnTypeName)){
+                            continue;
+                        }
                         String terminalID = rs.getString(i);
                         list.add(terminalID);
 
@@ -39,6 +40,47 @@ public class JdbcUtils {
             connection.close();
             pstmt.close();
            rs.close();
+
+        }
+        return list;
+
+    }
+
+    /**
+     *  需要时间 查询车辆
+     * @param sql
+     * @return
+     * @throws SQLException
+     */
+    public List<String>   runoftime(String sql) throws SQLException {
+        DateFormat dateFmt = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        Connection connection = DBUtils.getDataSource().getConnection();
+        PreparedStatement pstmt = null;
+        List<String> list = new ArrayList<>();
+        ResultSet rs=null;
+        try {
+            pstmt = connection.prepareStatement(sql);
+            rs = pstmt.executeQuery();
+            while (rs.next()){
+                int columnCount = rs.getMetaData().getColumnCount();
+                for (int i = 1; i <=columnCount ; i++) {
+                    String columnTypeName = rs.getMetaData().getColumnTypeName(i);//表字段类型
+                    if ("DATETIME".equals(columnTypeName)){
+                        String format = dateFmt.format(rs.getDate(i));
+                        list.add(format);
+                        continue;
+                    }
+                    String terminalID = rs.getString(i);
+                    list.add(terminalID);
+
+                }
+            }
+        }catch (SQLException e){
+            e.printStackTrace();
+        }finally {
+            connection.close();
+            pstmt.close();
+            rs.close();
 
         }
         return list;
@@ -141,16 +183,15 @@ public class JdbcUtils {
         }
     }
     @Transactional
-    public  void   save(String sql, Integer terminalId, Integer counts, String startdate,String endtime,Double mileage) throws SQLException {
+    public  void   save(String sql,  String counts,String vehicleid, String startdate,String endtime) throws SQLException {
         Connection connection = DBUtils.getDataSource().getConnection();
         PreparedStatement stmt = null;
         try {
             stmt = connection.prepareStatement(sql);
-            stmt.setInt(1,counts);
-            stmt.setDouble(2,mileage);
-            stmt.setInt(3,terminalId);
-            stmt.setString(4,startdate);
-            stmt.setString(5,endtime);
+            stmt.setString(1,counts);
+            stmt.setString(2,vehicleid);
+            stmt.setString(3,startdate);
+            stmt.setString(4,endtime);
 
             int i = stmt.executeUpdate();
             //处理结果
