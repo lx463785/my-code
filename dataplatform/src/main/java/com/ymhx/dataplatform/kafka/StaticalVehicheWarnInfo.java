@@ -61,9 +61,10 @@ public class StaticalVehicheWarnInfo implements Serializable {
 
         //获取所有车辆的terminal_id
         List<String> list = new JdbcUtils().getterminalID();
-        for (String terminalId : list) {
+        for (String vehicleid : list) {
             //倒序
-            String reverseId = StringUtils.reverse((terminalId));
+            //todo 补0
+            String reverseId = StringUtils.reverse((vehicleid));
             //hbase配置
             Configuration hconf = HBaseConfiguration.create();
             hconf.set("hbase.zookeeper.quorum","192.168.0.95:2181,192.168.0.46:2181,192.168.0.202:2181");
@@ -78,7 +79,7 @@ public class StaticalVehicheWarnInfo implements Serializable {
             hconf.set(TableInputFormat.SCAN_ROW_STOP,String.format("%s%s", reverseId, DateUtils.getBeforeOneDay().get("endTime")));
 
            //查询终端id为terminalId的车辆信息
-            List<String> run = new JdbcUtils().getTerminalData(terminalId);
+            List<String> run = new JdbcUtils().getTerminalData(vehicleid);
             //设置标识符
             //获取符合查询的hbase相应信息
             JavaPairRDD<ImmutableBytesWritable, Result> javaPairRDD = context.newAPIHadoopRDD(hconf, TableInputFormat.class, ImmutableBytesWritable.class, Result.class);
@@ -90,7 +91,7 @@ public class StaticalVehicheWarnInfo implements Serializable {
                     //获取每个车辆的报警类型
                     Integer alarmType = Integer.valueOf(Bytes.toString(result.getValue("alarm".getBytes(), "alarmType".getBytes())));
                     //获取每个车辆的终端ID
-                    String terminalId = Bytes.toString(result.getValue("alarm".getBytes(), "terminalId".getBytes()));
+                    String vehicleId = Bytes.toString(result.getValue("alarm".getBytes(), "vehicleId".getBytes()));
                     //获取每个车的速度进行判断
                     Double speed = Double.valueOf(Bytes.toString(result.getValue("alarm".getBytes(), "speed".getBytes())));
                     Double marking = 0.00;
@@ -130,7 +131,7 @@ public class StaticalVehicheWarnInfo implements Serializable {
                         }
                     }
 
-                    return new Tuple2<String, Double>(terminalId + "_" + alarmType, marking);
+                    return new Tuple2<String, Double>(vehicleId + "_" + alarmType, marking);
                 }
             }).reduceByKey(new Function2<Double, Double, Double>() {
                 @Override
@@ -212,19 +213,19 @@ public class StaticalVehicheWarnInfo implements Serializable {
                         making = Double.parseDouble(stringStringTuple2._2);
                     }
 
-                    int terminalid = Integer.parseInt(terminalId);
+                    int vehicleId = Integer.parseInt(vehicleid);
                     DateFormat dateFmt = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
                     //查询是否有该数据
-                    String querysql = "SELECT * from tb_vehicle_report WHERE terminal_id=? AND create_time>? AND create_time<=? ";
-                    querysql= String.format(querysql, terminalid, DateUtils.getBeforeOneDay().get("startTime"), DateUtils.getBeforeOneDay().get("endTime"));
-                    List<String> query = new JdbcUtils().query(querysql,terminalid,DateUtils.getcurrentTime().get("startTime"),DateUtils.getcurrentTime().get("endTime"));
+                    String querysql = "SELECT * from tb_vehicle_report WHERE vehicleId=? AND create_time>? AND create_time<=? ";
+                    querysql= String.format(querysql, vehicleId, DateUtils.getBeforeOneDay().get("startTime"), DateUtils.getBeforeOneDay().get("endTime"));
+                    List<String> query = new JdbcUtils().query(querysql,vehicleId,DateUtils.getcurrentTime().get("startTime"),DateUtils.getcurrentTime().get("endTime"));
                     if (query.size()==0){
                         //不存在进行新增操作
                         String sql = "insert into tb_vehicle_report  (terminal_id,vehicle_id,number_plate,superior_id,warn_risk,create_time,record_date) values (?,?,?,?,?,?,?)";
                         DecimalFormat df = new DecimalFormat("0.00");
                         df.setRoundingMode(RoundingMode.HALF_UP);
                         String format = df.format(making);
-                        new JdbcUtils().save(sql, Integer.parseInt(terminalId),Integer.parseInt(run.get(3)),run.get(1),Integer.parseInt(run.get(12)),
+                        new JdbcUtils().save(sql, Integer.parseInt(run.get(6)),vehicleId,run.get(1),Integer.parseInt(run.get(12)),
                                 format,dateFmt.format(new Date()),dateFmt.format(DateUtils.getBeforeOneDay().get("startTime")));
                     }else {
                         //以前的risk
@@ -247,8 +248,8 @@ public class StaticalVehicheWarnInfo implements Serializable {
                     //获取每个车辆的报警类型
                     Integer alarmType = Integer.valueOf(Bytes.toString(result.getValue("alarm".getBytes(), "alarmType".getBytes())));
                     //获取每个车辆的终端ID
-                    String terminalId = Bytes.toString(result.getValue("alarm".getBytes(), "terminalId".getBytes()));
-                    return new Tuple2<>(terminalId +"_"+ alarmType, 1);
+                    String vehicleId = Bytes.toString(result.getValue("alarm".getBytes(), "vehicleId".getBytes()));
+                    return new Tuple2<>(vehicleId +"_"+ alarmType, 1);
                 }
             }).reduceByKey(new Function2<Integer, Integer, Integer>() {
                 @Override
@@ -347,7 +348,7 @@ public class StaticalVehicheWarnInfo implements Serializable {
                     //公里数
                     Double mileage = stringTuple2Tuple2._2._2;
                     //插入报警信息
-                    String sql ="update tb_vehicle_report set %s=? mileage+=? where terminal_id=? and create_time>? and create_time<? ";
+                    String sql ="update tb_vehicle_report set %s=? mileage+=? where vehicle_id=? and create_time>? and create_time<? ";
                     String name = "";
                     if (ADASEnum.FCW.getVaule()==type){  //前碰撞
                         name="fwc";
@@ -368,7 +369,7 @@ public class StaticalVehicheWarnInfo implements Serializable {
                     }
                     if (StringUtils.isNotBlank(name)) {
                         sql = String.format(sql, name);
-                        new JdbcUtils().save(sql, Integer.parseInt(terminalId), counts, DateUtils.getcurrentTime().get("startTime"), DateUtils.getcurrentTime().get("endTime"),mileage);
+                        new JdbcUtils().save(sql, Integer.parseInt(vehicleid), counts, DateUtils.getcurrentTime().get("startTime"), DateUtils.getcurrentTime().get("endTime"),mileage);
                     }
                  }
 

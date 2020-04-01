@@ -170,10 +170,10 @@ public class JdbcUtils {
 
 
     /**
-     * 获取曹操专车的车辆的termid(写死了的)
+     * 获取曹操专车的车辆的vehicleid(写死了的)
      */
     public  List<String> getterminalID() throws SQLException {
-        String sql = "SELECT ve.terminal_id from tb_vehicle ve LEFT JOIN vehicle_group gp ON ve.vehicle_group=gp.`\uFEFFID` WHERE gp.SuperiorID='100118'";
+        String sql = "SELECT ve.vehicle_id from tb_vehicle ve LEFT JOIN vehicle_group gp ON ve.vehicle_group=gp.`\uFEFFID` WHERE gp.SuperiorID='100118'";
         List<String> terminalIds = run(sql);
         return terminalIds;
     }
@@ -190,7 +190,7 @@ public class JdbcUtils {
      * 获取曹操专车的某个termid的所有数据
      */
     public List<String> getTerminalData(String terminalid) throws SQLException {
-        String sql =  "SELECT * from tb_vehicle WHERE terminal_id=%s ";
+        String sql =  "SELECT * from tb_vehicle WHERE vehicle_id=%s ";
         sql= String.format(sql,terminalid);
         List<String> list = run(sql);
         return list;
