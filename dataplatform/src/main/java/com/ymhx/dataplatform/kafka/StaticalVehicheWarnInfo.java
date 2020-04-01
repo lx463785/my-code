@@ -18,7 +18,6 @@ import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.Function2;
 import org.apache.spark.api.java.function.PairFunction;
 import org.apache.spark.api.java.function.VoidFunction;
@@ -36,6 +35,7 @@ import java.text.DecimalFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.function.Function;
 
 import static org.apache.hadoop.hbase.mapreduce.TableMapReduceUtil.convertScanToString;
 
@@ -264,7 +264,7 @@ public class StaticalVehicheWarnInfo implements Serializable {
                 }
             });
             //统计公里数
-            javaPairRDD.mapToPair(new PairFunction<Tuple2<ImmutableBytesWritable, Result>, Integer,String >() {
+            JavaPairRDD<String, Double> mileagerdd = javaPairRDD.mapToPair(new PairFunction<Tuple2<ImmutableBytesWritable, Result>, Integer, String>() {
                 @Override
                 public Tuple2<Integer, String> call(Tuple2<ImmutableBytesWritable, Result> immutableBytesWritableResultTuple2) throws Exception {
                     Result result = immutableBytesWritableResultTuple2._2();
@@ -277,33 +277,34 @@ public class StaticalVehicheWarnInfo implements Serializable {
                     //获取时间
                     String warningTime = Bytes.toString(result.getValue("alarm".getBytes(), "warningTime".getBytes()));
 
-                    return new Tuple2<>(vehicleId,terminalId+"_"+warningTime+"_"+mileage);
+                    return new Tuple2<>(vehicleId, terminalId + "_" + warningTime + "_" + mileage);
                 }
-            }).groupByKey().sortByKey(false).mapToPair(new PairFunction<Tuple2<Integer, Iterable<String>>, String, String>() {
+            }).groupByKey().sortByKey(false).mapToPair(new PairFunction<Tuple2<Integer, Iterable<String>>, String, Double>() {
                 @Override
-                public Tuple2<String, String> call(Tuple2<Integer, Iterable<String>> integerIterableTuple2) throws Exception {
+                public Tuple2<String, Double> call(Tuple2<Integer, Iterable<String>> integerIterableTuple2) throws Exception {
                     Iterable<String> strings = integerIterableTuple2._2();
-                    Collections.sort(Lists.newArrayList(strings), new Comparator<String>() {
+                    ArrayList<String> newArrayList = Lists.newArrayList(strings);
+                    Collections.sort(newArrayList, new Comparator<String>() {
                         @Override
                         public int compare(String o1, String o2) {
                             List<String> newlist = Arrays.asList(o1.split("_"));
                             List<String> oldlist = Arrays.asList(o2.split("_"));
-                            if (Integer.parseInt(newlist.get(0))>=Integer.parseInt(oldlist.get(0))){
+                            if (Integer.parseInt(newlist.get(0)) >= Integer.parseInt(oldlist.get(0))) {
                                 return 0;
                             }
-                          return 1;
+                            return 1;
                         }
                     });
-                    Collections.sort(Lists.newArrayList(strings), new Comparator<String>() {
+                    Collections.sort(newArrayList, new Comparator<String>() {
                         @Override
                         public int compare(String o1, String o2) {
                             List<String> newlist = Arrays.asList(o1.split("_"));
                             List<String> oldlist = Arrays.asList(o2.split("_"));
-                            SimpleDateFormat sdf  =new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+                            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
                             try {
                                 Date newdate = sdf.parse(newlist.get(1));
                                 Date olddate = sdf.parse(oldlist.get(1));
-                                if (newdate.getTime()>=olddate.getTime()){
+                                if (newdate.getTime() >= olddate.getTime()) {
                                     return 0;
                                 }
                             } catch (ParseException e) {
@@ -313,21 +314,40 @@ public class StaticalVehicheWarnInfo implements Serializable {
                             return 1;
                         }
                     });
+                    //得到所有的值
+                    List<Double> doubles = new ArrayList<>();
+                    for (String s : newArrayList) {
+                        List<String> list1 = Arrays.asList(s.split("_"));
+                        double value = Double.parseDouble(list1.get(2));
+                        doubles.add(value);
+                    }
+                    Double odd = 0.00;
+                    for (int i = 0; i < doubles.size(); i++) {
+                        if (i > 0) {
+                            double value = doubles.get(i) - doubles.get(i - 1);
+                            if (value >= 100) {
+                                value = 0.00;
+                            }
+                            odd += value;
+                        }
 
-                    return null;
+                    }
+                    return new Tuple2<>(integerIterableTuple2._1.toString(), odd);
                 }
             });
-            JavaPairRDD<String, Tuple2<String, String>> join = pairRDD.join(newrdd);
-            join.foreach(new VoidFunction<Tuple2<String, Tuple2<String, String>>>() {
+            JavaPairRDD<String, Tuple2<Tuple2<String, String>, Double>> join = pairRDD.join(newrdd).join(mileagerdd);
+            join.foreach(new VoidFunction<Tuple2<String, Tuple2<Tuple2<String, String>, Double>>>() {
                 @Override
-                public void call(Tuple2<String, Tuple2<String, String>> stringTuple2Tuple2) throws Exception {
-                    System.out.println(stringTuple2Tuple2._2);
+                public void call(Tuple2<String, Tuple2<Tuple2<String, String>, Double>> stringTuple2Tuple2) throws Exception {
+                    System.out.println(stringTuple2Tuple2._2._1);
                     System.out.println(stringTuple2Tuple2._1);
-                    List<String> newlist = Arrays.asList(stringTuple2Tuple2._2._2.split("_"));
+                    List<String> newlist = Arrays.asList(stringTuple2Tuple2._2._1._2.split("_"));
                     int type = Integer.parseInt(newlist.get(0));
                     int counts = Integer.parseInt(newlist.get(1));
+                    //公里数
+                    Double mileage = stringTuple2Tuple2._2._2;
                     //插入报警信息
-                    String sql ="update tb_vehicle_report set %s=?  where terminal_id=? and create_time>? and create_time<? ";
+                    String sql ="update tb_vehicle_report set %s=? mileage+=? where terminal_id=? and create_time>? and create_time<? ";
                     String name = "";
                     if (ADASEnum.FCW.getVaule()==type){  //前碰撞
                         name="fwc";
@@ -348,9 +368,10 @@ public class StaticalVehicheWarnInfo implements Serializable {
                     }
                     if (StringUtils.isNotBlank(name)) {
                         sql = String.format(sql, name);
-                        new JdbcUtils().save(sql, Integer.parseInt(terminalId), counts, DateUtils.getcurrentTime().get("startTime"), DateUtils.getcurrentTime().get("endTime"));
+                        new JdbcUtils().save(sql, Integer.parseInt(terminalId), counts, DateUtils.getcurrentTime().get("startTime"), DateUtils.getcurrentTime().get("endTime"),mileage);
                     }
-                    }
+                 }
+
             });
 
         }

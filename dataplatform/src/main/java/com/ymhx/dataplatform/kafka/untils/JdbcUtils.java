@@ -94,6 +94,7 @@ public class JdbcUtils {
             stmt.setString(5,making);
             stmt.setString(6,date);
             stmt.setString(7,recodrtime);
+
             int i = stmt.executeUpdate();
             //处理结果
             if(i>0){
@@ -140,15 +141,17 @@ public class JdbcUtils {
         }
     }
     @Transactional
-    public  void   save(String sql, Integer terminalId, Integer counts, String startdate,String endtime) throws SQLException {
+    public  void   save(String sql, Integer terminalId, Integer counts, String startdate,String endtime,Double mileage) throws SQLException {
         Connection connection = DBUtils.getDataSource().getConnection();
         PreparedStatement stmt = null;
         try {
             stmt = connection.prepareStatement(sql);
             stmt.setInt(1,counts);
-            stmt.setInt(2,terminalId);
-            stmt.setString(3,startdate);
-            stmt.setString(4,endtime);
+            stmt.setDouble(2,mileage);
+            stmt.setInt(3,terminalId);
+            stmt.setString(4,startdate);
+            stmt.setString(5,endtime);
+
             int i = stmt.executeUpdate();
             //处理结果
             if(i>0){
