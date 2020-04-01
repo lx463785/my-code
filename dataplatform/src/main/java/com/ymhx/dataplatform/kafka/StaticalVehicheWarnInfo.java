@@ -1,9 +1,11 @@
 package com.ymhx.dataplatform.kafka;
 
+import com.google.common.collect.Lists;
 import com.ymhx.dataplatform.kafka.config.HbaseConfigMessage;
 import com.ymhx.dataplatform.kafka.untils.ADASEnum;
 import com.ymhx.dataplatform.kafka.untils.DateUtils;
 import com.ymhx.dataplatform.kafka.untils.JdbcUtils;
+import org.apache.commons.collections.IteratorUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
@@ -33,10 +35,7 @@ import java.text.DateFormat;
 import java.text.DecimalFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.List;
+import java.util.*;
 
 import static org.apache.hadoop.hbase.mapreduce.TableMapReduceUtil.convertScanToString;
 
@@ -262,6 +261,60 @@ public class StaticalVehicheWarnInfo implements Serializable {
                 public Tuple2<String, String> call(Tuple2<String, Integer> stringIntegerTuple2) throws Exception {
                     List<String> newlist = Arrays.asList(stringIntegerTuple2._1.split("_"));
                     return new Tuple2<>(newlist.get(0), newlist.get(1) + "_" + stringIntegerTuple2._2);
+                }
+            });
+            //统计公里数
+            javaPairRDD.mapToPair(new PairFunction<Tuple2<ImmutableBytesWritable, Result>, Integer,String >() {
+                @Override
+                public Tuple2<Integer, String> call(Tuple2<ImmutableBytesWritable, Result> immutableBytesWritableResultTuple2) throws Exception {
+                    Result result = immutableBytesWritableResultTuple2._2();
+                    //获取每个车辆的终端ID
+                    int terminalId = Bytes.toInt(result.getValue("alarm".getBytes(), "terminalId".getBytes()));
+                    //获取每辆车的id
+                    int vehicleId = Bytes.toInt(result.getValue("alarm".getBytes(), "vehicleId".getBytes()));
+                    //获取车辆的公里数
+                    Double mileage = Bytes.toDouble(result.getValue("alarm".getBytes(), "mileage".getBytes()));
+                    //获取时间
+                    String warningTime = Bytes.toString(result.getValue("alarm".getBytes(), "warningTime".getBytes()));
+
+                    return new Tuple2<>(vehicleId,terminalId+"_"+warningTime+"_"+mileage);
+                }
+            }).groupByKey().sortByKey(false).mapToPair(new PairFunction<Tuple2<Integer, Iterable<String>>, String, String>() {
+                @Override
+                public Tuple2<String, String> call(Tuple2<Integer, Iterable<String>> integerIterableTuple2) throws Exception {
+                    Iterable<String> strings = integerIterableTuple2._2();
+                    Collections.sort(Lists.newArrayList(strings), new Comparator<String>() {
+                        @Override
+                        public int compare(String o1, String o2) {
+                            List<String> newlist = Arrays.asList(o1.split("_"));
+                            List<String> oldlist = Arrays.asList(o2.split("_"));
+                            if (Integer.parseInt(newlist.get(0))>=Integer.parseInt(oldlist.get(0))){
+                                return 0;
+                            }
+                          return 1;
+                        }
+                    });
+                    Collections.sort(Lists.newArrayList(strings), new Comparator<String>() {
+                        @Override
+                        public int compare(String o1, String o2) {
+                            List<String> newlist = Arrays.asList(o1.split("_"));
+                            List<String> oldlist = Arrays.asList(o2.split("_"));
+                            SimpleDateFormat sdf  =new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+                            try {
+                                Date newdate = sdf.parse(newlist.get(1));
+                                Date olddate = sdf.parse(oldlist.get(1));
+                                if (newdate.getTime()>=olddate.getTime()){
+                                    return 0;
+                                }
+                            } catch (ParseException e) {
+                                e.printStackTrace();
+                            }
+
+                            return 1;
+                        }
+                    });
+
+                    return null;
                 }
             });
             JavaPairRDD<String, Tuple2<String, String>> join = pairRDD.join(newrdd);
