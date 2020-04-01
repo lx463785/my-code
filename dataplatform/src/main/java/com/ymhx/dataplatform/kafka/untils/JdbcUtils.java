@@ -27,15 +27,10 @@ public class JdbcUtils {
                 int columnCount = rs.getMetaData().getColumnCount();
                 for (int i = 1; i <=columnCount ; i++) {
                     String columnTypeName = rs.getMetaData().getColumnTypeName(i);//表字段类型
-                    if ("DATETIME".equals(columnTypeName)){
-//                        Time timestamp = rs.getTime(i);
-//                        String format = dateFmt.format(timestamp);
-//                        list.add(format);
-                        continue;
-                    }else {
+
                         String terminalID = rs.getString(i);
                         list.add(terminalID);
-                    }
+
                 }
             }
         }catch (SQLException e){
@@ -86,9 +81,39 @@ public class JdbcUtils {
 
     }
 
-
     @Transactional
-    public  void   save(String sql, Integer terminalid, String making, String date) throws SQLException {
+    public  void   save(String sql, Integer terminalid,Integer vehicleid,String number_plate,Integer groupid, String making, String date,String recodrtime) throws SQLException {
+        Connection connection = DBUtils.getDataSource().getConnection();
+        PreparedStatement stmt = null;
+        try {
+            stmt = connection.prepareStatement(sql);
+            stmt.setInt(1,terminalid);
+            stmt.setInt(2,vehicleid);
+            stmt.setString(3,number_plate);
+            stmt.setInt(4,groupid);
+            stmt.setString(5,making);
+            stmt.setString(6,date);
+            stmt.setString(7,recodrtime);
+            int i = stmt.executeUpdate();
+            //处理结果
+            if(i>0){
+
+                System.out.println("stmt更新数据成功");
+
+            }else{
+
+                System.out.println("stmt更新数据失败");
+            }
+            stmt.addBatch();
+        }catch (SQLException e){
+            e.printStackTrace();
+        }finally {
+            connection.close();
+            stmt.close();
+        }
+    }
+    @Transactional
+    public  void   update(String sql, Integer terminalid, String making, String date) throws SQLException {
         Connection connection = DBUtils.getDataSource().getConnection();
         PreparedStatement stmt = null;
         try {
@@ -100,11 +125,11 @@ public class JdbcUtils {
             //处理结果
             if(i>0){
 
-                System.out.println("stmt插入数据成功");
+                System.out.println("stmt更新数据成功");
 
             }else{
 
-                System.out.println("stmt插入数据失败");
+                System.out.println("stmt更新数据失败");
             }
             stmt.addBatch();
         }catch (SQLException e){
@@ -113,8 +138,31 @@ public class JdbcUtils {
            connection.close();
            stmt.close();
         }
-
-
+    }
+    @Transactional
+    public  void   save(String sql, Integer terminalId, Integer counts, String startdate,String endtime) throws SQLException {
+        Connection connection = DBUtils.getDataSource().getConnection();
+        PreparedStatement stmt = null;
+        try {
+            stmt = connection.prepareStatement(sql);
+            stmt.setInt(1,counts);
+            stmt.setInt(2,terminalId);
+            stmt.setString(3,startdate);
+            stmt.setString(4,endtime);
+            int i = stmt.executeUpdate();
+            //处理结果
+            if(i>0){
+                System.out.println("stmt插入数据成功");
+            }else{
+                System.out.println("stmt插入数据失败");
+            }
+            stmt.addBatch();
+        }catch (SQLException e){
+            e.printStackTrace();
+        }finally {
+            connection.close();
+            stmt.close();
+        }
     }
 
 
