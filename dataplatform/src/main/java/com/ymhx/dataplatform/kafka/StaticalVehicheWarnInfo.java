@@ -290,18 +290,24 @@ public class StaticalVehicheWarnInfo implements Serializable {
                             name = "fwc";
                         } else if (ADASEnum.UFCW.getVaule() == type) {//低速前碰撞
                             name = "ufcw";
-                        } else if (ADASEnum.LDW.getVaule() == type) {
+                        } else if (ADASEnum.LDW.getVaule() == type) { //车道左偏移
                             name = "ldw";
-                        } else if (ADASEnum.LDWR.getVaule() == type) {
+                        } else if (ADASEnum.LDWR.getVaule() == type) { //车道右偏移
                             name = "rdw";
-                        } else if (ADASEnum.HMW.getVaule() == type) {
+                        } else if (ADASEnum.HMW.getVaule() == type) {  //车距检测
                             name = "hmw";
-                        } else if (ADASEnum.PCW.getVaule() == type) {
+                        } else if (ADASEnum.PCW.getVaule() == type) { //行人碰撞
                             name = "pcw";
-                        } else if (ADASEnum.FFW.getVaule() == type) {
+                        } else if (ADASEnum.FFW.getVaule() == type) { //// 驾驶辅助功能失效
                             name = "failure";
-                        } else if (ADASEnum.TSR.getVaule() == type) {
+                        } else if (ADASEnum.TSR.getVaule() == type) { //限速提示
                             name = "transfinite";
+                        }else if (ADASEnum.ODA.getVaule()==type){
+                            name="oda";
+                        }else if (ADASEnum.ABW.getVaule()==type){
+                            name="abw";
+                        }else if (ADASEnum.AEB.getVaule()==type){
+                            name="aeb";
                         }
                         if (StringUtils.isNotBlank(name)) {
                             sql = String.format(sql, name);
