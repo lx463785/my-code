@@ -75,11 +75,17 @@ public class KafkaTest {
         }
         @Test
         public  void  getWarnCoefficient() throws IOException, SQLException, ParseException {
-                staticalVehicheWarnInfo.getWarnCoefficient();
+
+                        staticalVehicheWarnInfo.getWarnCoefficient();
+
+
         }
         @Test
         public  void  getMileageCount() throws IOException, SQLException, ParseException {
-                staticalVehicheWarnInfo.getMileageCount();
+                for (int i = 0; i <Integer.MAX_VALUE; i++) {
+                        staticalVehicheWarnInfo.getMileageCount(i);
+                }
+
         }
 
 }
