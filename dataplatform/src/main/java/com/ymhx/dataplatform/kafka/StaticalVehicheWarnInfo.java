@@ -81,7 +81,9 @@ public class StaticalVehicheWarnInfo implements Serializable {
 
                 //设置标识符
                 //获取符合查询的hbase相应信息
-                JavaPairRDD<ImmutableBytesWritable, Result> javaPairRDD = context.newAPIHadoopRDD(hconf, TableInputFormat.class, ImmutableBytesWritable.class, Result.class);
+                JavaPairRDD<ImmutableBytesWritable, Result> javaPairRDD = context.newAPIHadoopRDD(hconf, TableInputFormat
+                        .class, ImmutableBytesWritable.class, Result.class);
+                long count = javaPairRDD.count();
                 JavaPairRDD<String, Double> stringDoubleJavaPairRDD = javaPairRDD.mapToPair(new PairFunction<Tuple2<ImmutableBytesWritable, Result>, String, Double>() {
                     @Override
                     public Tuple2<String, Double> call(Tuple2<ImmutableBytesWritable, Result> immutableBytesWritableResultTuple2) throws Exception {
@@ -220,7 +222,7 @@ public class StaticalVehicheWarnInfo implements Serializable {
                             DecimalFormat df = new DecimalFormat("0.00");
                             df.setRoundingMode(RoundingMode.HALF_UP);
                             String format = df.format(making);
-                            new JdbcUtils().save(sql, Integer.parseInt(run.get(6)), vehicleId, run.get(1), Integer.parseInt(run.get(12)),
+                            new JdbcUtils().save(sql, Integer.parseInt(run.get(6)), vehicleId, run.get(1), Integer.parseInt(run.get(11)),
                                     format, dateFmt.format(new Date()), dateFmt.format(DateUtils.getBeforeOneDay(integer).get("startTime")));
                         } else {
                             //以前的risk
@@ -331,7 +333,7 @@ public class StaticalVehicheWarnInfo implements Serializable {
     /**
      * 计算里程
      */
-    public void getMileageCount(Integer integer) throws SQLException, ParseException, IOException {
+    public void getMileageCount() throws SQLException, ParseException, IOException {
         SparkConf conf = new SparkConf().setAppName("warn")
                 .setMaster("local[2]")
                 //序列化
@@ -342,6 +344,8 @@ public class StaticalVehicheWarnInfo implements Serializable {
 
         //获取所有车辆的terminal_id
         List<String> list = new JdbcUtils().getterminalID();
+        for (int i = 0; i < 225; i++) {
+            int integer = i;
         for (String vehicleid : list) {
             //倒序
 
@@ -451,6 +455,7 @@ public class StaticalVehicheWarnInfo implements Serializable {
                     new JdbcUtils().save(sql, String.format("%.2f", stringDoubleTuple2._2), stringDoubleTuple2._1, start, end);
                 }
             });
+        }
         }
     }
 }

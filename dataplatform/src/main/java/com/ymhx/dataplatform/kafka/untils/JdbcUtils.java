@@ -104,20 +104,25 @@ public class JdbcUtils {
                 //获取id数据
                 int columnCount = rs.getMetaData().getColumnCount();
                 if (columnCount>0){
-                    String reportid = rs.getString(1);
-                    list.add(reportid);
                     String risk = rs.getString(7);
                     list.add(risk);
+                    String reportid = rs.getString(1);
+                    list.add(reportid);
                 }
             }
 
         }catch (SQLException e){
             e.printStackTrace();
         }finally {
+            if (connection!=null){
             connection.close();
+            }
+            if (pstmt!=null){
             pstmt.close();
-            rs.close();
-
+            }
+            if (rs!=null) {
+                rs.close();
+            }
         }
         return  list;
 

@@ -82,9 +82,9 @@ public class KafkaTest {
         }
         @Test
         public  void  getMileageCount() throws IOException, SQLException, ParseException {
-                for (int i = 0; i <Integer.MAX_VALUE; i++) {
-                        staticalVehicheWarnInfo.getMileageCount(i);
-                }
+
+                        staticalVehicheWarnInfo.getMileageCount();
+
 
         }
 
