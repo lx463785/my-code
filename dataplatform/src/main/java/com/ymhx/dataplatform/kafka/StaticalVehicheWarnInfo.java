@@ -1,11 +1,9 @@
 package com.ymhx.dataplatform.kafka;
 
 import com.google.common.collect.Lists;
-import com.ymhx.dataplatform.kafka.config.HbaseConfigMessage;
-import com.ymhx.dataplatform.kafka.untils.ADASEnum;
+import com.ymhx.dataplatform.kafka.domain.ADASNewEnum;
 import com.ymhx.dataplatform.kafka.untils.DateUtils;
 import com.ymhx.dataplatform.kafka.untils.JdbcUtils;
-import org.apache.commons.collections.IteratorUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
@@ -21,16 +19,13 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function2;
 import org.apache.spark.api.java.function.PairFunction;
 import org.apache.spark.api.java.function.VoidFunction;
-import org.apache.spark.streaming.Duration;
 import org.apache.spark.streaming.Durations;
 import org.apache.spark.streaming.api.java.JavaStreamingContext;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import scala.Tuple2;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.SQLException;
 import java.text.DateFormat;
@@ -38,9 +33,6 @@ import java.text.DecimalFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
-import java.util.function.Function;
-
-import static org.apache.hadoop.hbase.mapreduce.TableMapReduceUtil.convertScanToString;
 
 @Component
 public class StaticalVehicheWarnInfo implements Serializable {
@@ -60,24 +52,23 @@ public class StaticalVehicheWarnInfo implements Serializable {
         JavaSparkContext context = jsc.sparkContext();
         //获取所有车辆的terminal_id
         List<String> list = new JdbcUtils().getterminalID();
-        for (int i =0 ; i < 225; i++) {
-            int integer=i;
-        for (String vehicleid : list) {
+        for (int i = 0; i < 225; i++) {
+            int integer = i;
+            for (String vehicleid : list) {
 
 
+                //查询配置信息
+                List<String> configlist = new JdbcUtils().getconfiglist();
+                //查询终端id为terminalId的车辆信息
+                List<String> run = new JdbcUtils().getTerminalData(vehicleid);
+                //倒序
+                String reverseId = StringUtils.reverse((run.get(6)));
 
-            //查询配置信息
-            List<String> configlist = new JdbcUtils().getconfiglist();
-            //查询终端id为terminalId的车辆信息
-            List<String> run = new JdbcUtils().getTerminalData(vehicleid);
-            //倒序
-            String reverseId = StringUtils.reverse((run.get(6)));
-
-            //hbase配置
-            Configuration hconf = HBaseConfiguration.create();
-            hconf.set("hbase.zookeeper.quorum", "192.168.0.95:2181,192.168.0.46:2181,192.168.0.202:2181");
-            hconf.set("hbase.zookeeper.property.clientPort", "2181");
-            hconf.set(TableInputFormat.INPUT_TABLE, "vehicle_alarm_adas");
+                //hbase配置
+                Configuration hconf = HBaseConfiguration.create();
+                hconf.set("hbase.zookeeper.quorum", "192.168.0.95:2181,192.168.0.46:2181,192.168.0.202:2181");
+                hconf.set("hbase.zookeeper.property.clientPort", "2181");
+                hconf.set(TableInputFormat.INPUT_TABLE, "vehicle_alarm_adas");
 
 
                 Scan scan = new Scan();
@@ -91,7 +82,6 @@ public class StaticalVehicheWarnInfo implements Serializable {
                 //设置标识符
                 //获取符合查询的hbase相应信息
                 JavaPairRDD<ImmutableBytesWritable, Result> javaPairRDD = context.newAPIHadoopRDD(hconf, TableInputFormat.class, ImmutableBytesWritable.class, Result.class);
-                long count = javaPairRDD.count();
                 JavaPairRDD<String, Double> stringDoubleJavaPairRDD = javaPairRDD.mapToPair(new PairFunction<Tuple2<ImmutableBytesWritable, Result>, String, Double>() {
                     @Override
                     public Tuple2<String, Double> call(Tuple2<ImmutableBytesWritable, Result> immutableBytesWritableResultTuple2) throws Exception {
@@ -104,36 +94,37 @@ public class StaticalVehicheWarnInfo implements Serializable {
                         Double speed = Double.valueOf(Bytes.toString(result.getValue("alarm".getBytes(), "speed".getBytes())));
                         Double marking = 0.00;
 
-                        if (alarmType == ADASEnum.FCW.getVaule()) {  //.....前碰撞
-                            //判断速度为低速还是高速
-                            if (speed >= Double.valueOf(configlist.get(15))) {
-                                marking += 1 * Double.valueOf(configlist.get(3));
-                            } else if (speed < Double.valueOf(configlist.get(15)) && speed >= Double.valueOf(configlist.get(16))) {
-                                marking += 1 * Double.valueOf(configlist.get(4));
+                        if (alarmType == ADASNewEnum.FCWANDUFCW.getVaule()) {  //.....前向碰撞
+                            //根据速度判断是否为前碰撞还是低速前碰撞 计算相应系数
+                            if (speed >= Double.parseDouble(configlist.get(15))) {   //.......前碰撞
+                                marking += 1 * Double.parseDouble(configlist.get(3));
+                                alarmType=ADASNewEnum.FCW.getVaule();
+                            } else if (speed < Double.parseDouble(configlist.get(15)) && speed >= Double.parseDouble(configlist.get(16))) {
+                                marking += 1 * Double.parseDouble(configlist.get(4));
+                                alarmType=ADASNewEnum.FCW.getVaule();
+                            } else if (speed >= Double.parseDouble(configlist.get(17))) {  //......低速碰撞
+                                    marking += 1 * Double.parseDouble(configlist.get(6));
+                                alarmType=ADASNewEnum.UFCW.getVaule();
+                                }
+                        }  else if (alarmType == ADASNewEnum.LDWADNLDWR.getVaule()) { //......车道偏移
+                            if (speed >= Double.parseDouble(configlist.get(18))) {
+                                marking += 1 * Double.parseDouble(configlist.get(7));
+                                alarmType=ADASNewEnum.LDWR.getVaule();
                             } else {
-                                marking = 0.00;
+                                marking += 1 * Double.parseDouble(configlist.get(8));
+                                alarmType=ADASNewEnum.LDW.getVaule();
                             }
-                        } else if (alarmType == ADASEnum.UFCW.getVaule()) { //......低速碰撞
-                            if (speed >= Double.valueOf(configlist.get(17))) {
-                                marking += 1 * Double.valueOf(configlist.get(6));
-                            }
-                        } else if (alarmType == ADASEnum.LDW.getVaule() || alarmType == ADASEnum.LDWR.getVaule()) { //......车道偏移
-                            if (speed >= Double.valueOf(configlist.get(18))) {
-                                marking += 1 * Double.valueOf(configlist.get(7));
+                        } else if (alarmType == ADASNewEnum.PCW.getVaule()) {  //.....行人碰撞
+                            marking += 1 * Double.parseDouble(configlist.get(10));
+                        } else if (alarmType == ADASNewEnum.HMW.getVaule()) {  //.....车距检测
+                            if (speed >= Double.parseDouble(configlist.get(20))) {
+                                marking += 1 * Double.parseDouble(configlist.get(11));
                             } else {
-                                marking += 1 * Double.valueOf(configlist.get(8));
+                                marking += 1 * Double.parseDouble(configlist.get(12));
                             }
-                        } else if (alarmType == ADASEnum.PCW.getVaule()) {  //.....行人碰撞
-                            marking += 1 * Double.valueOf(configlist.get(10));
-                        } else if (alarmType == ADASEnum.HMW.getVaule()) {  //.....车距检测
-                            if (speed >= Double.valueOf(configlist.get(20))) {
-                                marking += 1 * Double.valueOf(configlist.get(11));
-                            } else {
-                                marking += 1 * Double.valueOf(configlist.get(12));
-                            }
-                        } else if (alarmType == ADASEnum.TSR.getVaule()) {  //.....超速
-                            if (speed >= Double.valueOf(configlist.get(19))) {
-                                marking += 1 * Double.valueOf(configlist.get(14));
+                        } else if (alarmType == ADASNewEnum.TSR.getVaule()) {  //.....超速
+                            if (speed >= Double.parseDouble(configlist.get(19))) {
+                                marking += 1 * Double.parseDouble(configlist.get(14));
                             } else {
                                 marking = marking;
                             }
@@ -152,10 +143,6 @@ public class StaticalVehicheWarnInfo implements Serializable {
                     @Override
                     public Tuple2<String, String> call(Tuple2<String, Double> stringDoubleTuple2) throws Exception {
                         List<String> asList = Arrays.asList(stringDoubleTuple2._1.split("_"));
-                        String mes = asList.get(1) + "_" + stringDoubleTuple2._2;
-                        String s = asList.get(0);
-                        String sd = asList.get(1) + "_" + stringDoubleTuple2._2;
-
                         return new Tuple2<>(asList.get(0), asList.get(1) + "_" + stringDoubleTuple2._2);
                     }
                 }).reduceByKey(new Function2<String, String, String>() {
@@ -166,11 +153,11 @@ public class StaticalVehicheWarnInfo implements Serializable {
                             List<String> values = Arrays.asList(s2.split("_"));
                             int alarmtype = Integer.parseInt(values.get(0));
                             //对前碰撞 车道偏移 车距检测省基数
-                            if (alarmtype == ADASEnum.FCW.getVaule()) {
+                            if (alarmtype == ADASNewEnum.FCW.getVaule()) {
                                 making += Double.parseDouble(values.get(1)) * Double.valueOf(configlist.get(5));
-                            } else if (alarmtype == ADASEnum.LDW.getVaule() || alarmtype == ADASEnum.LDWR.getVaule()) {
+                            } else if (alarmtype == ADASNewEnum.LDW.getVaule() || alarmtype == ADASNewEnum.LDWR.getVaule()) {
                                 making += Double.parseDouble(values.get(1)) * Double.valueOf(configlist.get(9));
-                            } else if (alarmtype == ADASEnum.HMW.getVaule()) {
+                            } else if (alarmtype == ADASNewEnum.HMW.getVaule()) {
                                 making += Double.parseDouble(values.get(1)) * Double.valueOf(configlist.get(14));
                             } else {
                                 making += Double.parseDouble(values.get(1));
@@ -182,11 +169,11 @@ public class StaticalVehicheWarnInfo implements Serializable {
                         if (s.contains("_")) {
                             List<String> values1 = Arrays.asList(s.split("_"));
                             int alarmtype1 = Integer.parseInt(values1.get(0));
-                            if (alarmtype1 == ADASEnum.FCW.getVaule()) {
+                            if (alarmtype1 == ADASNewEnum.FCW.getVaule()) {
                                 making += Double.parseDouble(values1.get(1)) * Double.valueOf(configlist.get(5));
-                            } else if (alarmtype1 == ADASEnum.LDW.getVaule() || alarmtype1 == ADASEnum.LDWR.getVaule()) {
+                            } else if (alarmtype1 == ADASNewEnum.LDW.getVaule() || alarmtype1 == ADASNewEnum.LDWR.getVaule()) {
                                 making += Double.parseDouble(values1.get(1)) * Double.valueOf(configlist.get(9));
-                            } else if (alarmtype1 == ADASEnum.HMW.getVaule()) {
+                            } else if (alarmtype1 == ADASNewEnum.HMW.getVaule()) {
                                 making += Double.parseDouble(values1.get(1)) * Double.valueOf(configlist.get(14));
                             } else {
                                 making += Double.parseDouble(values1.get(1));
@@ -207,11 +194,11 @@ public class StaticalVehicheWarnInfo implements Serializable {
                             List<String> values = Arrays.asList(stringStringTuple2._2.split("_"));
                             int alarmtype = Integer.parseInt(values.get(0));
                             //对前碰撞 车道偏移 车距检测省基数
-                            if (alarmtype == ADASEnum.FCW.getVaule()) {
+                            if (alarmtype == ADASNewEnum.FCW.getVaule()) {
                                 making += Double.parseDouble(values.get(1)) * Double.valueOf(configlist.get(5));
-                            } else if (alarmtype == ADASEnum.LDW.getVaule() || alarmtype == ADASEnum.LDWR.getVaule()) {
+                            } else if (alarmtype == ADASNewEnum.LDW.getVaule() || alarmtype == ADASNewEnum.LDWR.getVaule()) {
                                 making += Double.parseDouble(values.get(1)) * Double.valueOf(configlist.get(9));
-                            } else if (alarmtype == ADASEnum.HMW.getVaule()) {
+                            } else if (alarmtype == ADASNewEnum.HMW.getVaule()) {
                                 making += Double.parseDouble(values.get(1)) * Double.valueOf(configlist.get(14));
                             } else {
                                 making += Double.parseDouble(values.get(1));
@@ -257,6 +244,24 @@ public class StaticalVehicheWarnInfo implements Serializable {
                         Integer alarmType = Integer.valueOf(Bytes.toString(result.getValue("alarm".getBytes(), "alarmType".getBytes())));
                         //获取每个车辆的终端ID
                         String vehicleId = Bytes.toString(result.getValue("alarm".getBytes(), "vehicleId".getBytes()));
+                        //获取每个车的速度进行判断
+                        Double speed = Double.valueOf(Bytes.toString(result.getValue("alarm".getBytes(), "speed".getBytes())));
+
+
+                        if (alarmType == ADASNewEnum.FCWANDUFCW.getVaule()) {  //.....前向碰撞
+                            //根据速度判断是否为前碰撞还是低速前碰撞 计算相应系数
+                             if (speed >= Double.parseDouble(configlist.get(17))) {
+                                alarmType=ADASNewEnum.UFCW.getVaule();         //...... 前碰撞
+                            }else {
+                                alarmType=ADASNewEnum.FCW.getVaule();          //......低速碰撞
+                            }
+                        }  else if (alarmType == ADASNewEnum.LDWADNLDWR.getVaule()) { //......车道偏移
+                            if (speed >= Double.parseDouble(configlist.get(18))) {
+                                alarmType=ADASNewEnum.LDWR.getVaule();
+                            } else {
+                                alarmType=ADASNewEnum.LDW.getVaule();
+                            }
+                        }
                         return new Tuple2<>(vehicleId + "_" + alarmType, 1);
                     }
                 }).reduceByKey(new Function2<Integer, Integer, Integer>() {
@@ -286,28 +291,30 @@ public class StaticalVehicheWarnInfo implements Serializable {
                         //插入报警信息
                         String sql = "update tb_vehicle_report set %s=?  where vehicle_id=? and create_time>? and create_time<? ";
                         String name = "";
-                        if (ADASEnum.FCW.getVaule() == type) {  //前碰撞
+                        if (ADASNewEnum.FCW.getVaule() == type) {  //前碰撞
                             name = "fwc";
-                        } else if (ADASEnum.UFCW.getVaule() == type) {//低速前碰撞
+                        } else if (ADASNewEnum.UFCW.getVaule() == type) {//低速前碰撞
                             name = "ufcw";
-                        } else if (ADASEnum.LDW.getVaule() == type) { //车道左偏移
+                        } else if (ADASNewEnum.LDW.getVaule() == type) { //车道左偏移
                             name = "ldw";
-                        } else if (ADASEnum.LDWR.getVaule() == type) { //车道右偏移
+                        } else if (ADASNewEnum.LDWR.getVaule() == type) { //车道右偏移
                             name = "rdw";
-                        } else if (ADASEnum.HMW.getVaule() == type) {  //车距检测
+                        } else if (ADASNewEnum.HMW.getVaule() == type) {  //车距检测
                             name = "hmw";
-                        } else if (ADASEnum.PCW.getVaule() == type) { //行人碰撞
+                        } else if (ADASNewEnum.PCW.getVaule() == type) { //行人碰撞
                             name = "pcw";
-                        } else if (ADASEnum.FFW.getVaule() == type) { //// 驾驶辅助功能失效
-                            name = "failure";
-                        } else if (ADASEnum.TSR.getVaule() == type) { //限速提示
-                            name = "transfinite";
-                        }else if (ADASEnum.ODA.getVaule()==type){
-                            name="oda";
-                        }else if (ADASEnum.ABW.getVaule()==type){
-                            name="abw";
-                        }else if (ADASEnum.AEB.getVaule()==type){
-                            name="aeb";
+                        } else if (ADASNewEnum.ACC.getVaule() == type) { //// 驾驶辅助功能失效
+                            name = "acc";
+                        } else if (ADASNewEnum.TSR.getVaule() == type) { //限速提示
+                            name = "tsr";
+                        } else if (ADASNewEnum.ODA.getVaule() == type) {
+                            name = "oda";
+                        } else if (ADASNewEnum.FFW.getVaule() == type) {
+                            name = "ffw";
+                        } else if (ADASNewEnum.Road_Risking.getVaule() == type) {
+                            name = "road_risking";
+                        }else if (ADASNewEnum.Active_Capture.getVaule() == type){
+                            name="active_capture";
                         }
                         if (StringUtils.isNotBlank(name)) {
                             sql = String.format(sql, name);
@@ -441,7 +448,7 @@ public class StaticalVehicheWarnInfo implements Serializable {
                     String start = dateFmt.format(startTime);
                     String end = dateFmt.format(endTime);
                     String sql = "update tb_vehicle_report set mileage=?  where vehicle_id=? and record_date>=? and record_date<? ";
-                    new JdbcUtils().save(sql, String.format("%.2f",stringDoubleTuple2._2), stringDoubleTuple2._1, start, end);
+                    new JdbcUtils().save(sql, String.format("%.2f", stringDoubleTuple2._2), stringDoubleTuple2._1, start, end);
                 }
             });
         }
