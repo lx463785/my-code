@@ -262,9 +262,10 @@ public class HBaseRepository implements  Serializable {
             if (tableName.equals(MqConstant.vehicleAlarmInformation)){
                 for (T value : values) {
                     VehicleReportAlarm vehicleReportAlarm = (VehicleReportAlarm) value;
-                    Put put = new Put((String.valueOf(Long.MAX_VALUE-System.currentTimeMillis())+vehicleReportAlarm.getVehicleNo()).getBytes());
                     List<String> commonattribute = BeanUtils.getAttribute(VehicleDynamicInfo.class);
                     List<String> alarmattr = BeanUtils.getAttribute( VehicleReportAlarm.VehicleReportContent.class);
+                    Put put = new Put((String.valueOf(Long.MAX_VALUE-System.currentTimeMillis())+vehicleReportAlarm.getVehicleNo()).getBytes(),System.currentTimeMillis());
+
                     List<Put> putList = new ArrayList<>();
                     putList.add(put.addColumn(Bytes.toBytes("common"),Bytes.toBytes(commonattribute.get(0)),Bytes.toBytes(vehicleReportAlarm.getVehicleNo())));
                     putList.add(put.addColumn(Bytes.toBytes("common"),Bytes.toBytes(commonattribute.get(1)),Bytes.toBytes(vehicleReportAlarm.getVehicleColor())));
@@ -282,7 +283,7 @@ public class HBaseRepository implements  Serializable {
             }else  if (tableName.equals(MqConstant.vehicleLocationReissue)){
                 for (T value : values) {
                     VehicleLocationReissue vehicleLocationReissue = (VehicleLocationReissue) value;
-                    Put put = new Put((String.valueOf(Long.MAX_VALUE-System.currentTimeMillis())+vehicleLocationReissue.getVehicleNo()).getBytes());
+                    Put put = new Put((String.valueOf(Long.MAX_VALUE-System.currentTimeMillis())+vehicleLocationReissue.getVehicleNo()).getBytes(),System.currentTimeMillis());
                     List<String> commonattribute = BeanUtils.getAttribute(VehicleDynamicInfo.class);
                     List<String> alarmattr = BeanUtils.getAttribute( VehicleLocationMessage.class);
                     List<Put> putList = new ArrayList<>();
@@ -341,7 +342,9 @@ public class HBaseRepository implements  Serializable {
             }else  if (tableName.equals(MqConstant.vehicleRealTimeLocation)){
                 for (T value : values) {
                     VehicleLocation vehicleLocation = (VehicleLocation) value;
-                    Put put = new Put((String.valueOf(Long.MAX_VALUE-System.currentTimeMillis())+vehicleLocation.getVehicleNo()).getBytes());
+                    VehicleLocation.VehicleLocalContent vehicleLocalContent = vehicleLocation.getData();
+                    VehicleLocationMessage vehicleLocationMessage =vehicleLocalContent.getVehicleLocationMessage();
+                    Put put = new Put((String.valueOf(Long.MAX_VALUE-System.currentTimeMillis())+vehicleLocation.getVehicleNo()).getBytes(),vehicleLocationMessage.getDatetime().getTime());
                     List<String> commonattribute = BeanUtils.getAttribute(VehicleDynamicInfo.class);
                     List<String> alarmattr = BeanUtils.getAttribute(VehicleLocationMessage.class);
                     List<Put> putList = new ArrayList<>();
@@ -349,8 +352,8 @@ public class HBaseRepository implements  Serializable {
                     putList.add(put.addColumn(Bytes.toBytes("common"),Bytes.toBytes(commonattribute.get(1)),Bytes.toBytes(vehicleLocation.getVehicleColor())));
                     putList.add(put.addColumn(Bytes.toBytes("common"),Bytes.toBytes(commonattribute.get(2)),Bytes.toBytes(vehicleLocation.getDataType())));
                     putList.add(put.addColumn(Bytes.toBytes("common"),Bytes.toBytes(commonattribute.get(3)),Bytes.toBytes(vehicleLocation.getDataLength())));
-                    VehicleLocation.VehicleLocalContent vehicleLocalContent = vehicleLocation.getData();
-                    VehicleLocationMessage vehicleLocationMessage =vehicleLocalContent.getVehicleLocationMessage();
+
+
                     putList.add(put.addColumn(Bytes.toBytes("location"),Bytes.toBytes(alarmattr.get(0)),Bytes.toBytes(vehicleLocationMessage.isEncrypt())));
                     putList.add(put.addColumn(Bytes.toBytes("location"),Bytes.toBytes(alarmattr.get(1)),Bytes.toBytes(vehicleLocationMessage.getDatetime().toString())));
                     putList.add(put.addColumn(Bytes.toBytes("location"),Bytes.toBytes(alarmattr.get(2)),Bytes.toBytes(vehicleLocationMessage.getLon())));
@@ -397,7 +400,7 @@ public class HBaseRepository implements  Serializable {
             }else  if (tableName.equals(MqConstant.vehicleRegister)){
                 for (T value : values) {
                     VehicleRegister vehicleRegister = (VehicleRegister) value;
-                    Put put = new Put((String.valueOf(Long.MAX_VALUE-System.currentTimeMillis())+vehicleRegister.getVehicleNo()).getBytes());
+                    Put put = new Put((String.valueOf(Long.MAX_VALUE-System.currentTimeMillis())+vehicleRegister.getVehicleNo()).getBytes(),System.currentTimeMillis());
                     List<String> commonattribute = BeanUtils.getAttribute(VehicleDynamicInfo.class);
                     List<String> alarmattr = BeanUtils.getAttribute( VehicleRegister.VehicleInfo.class);
                     List<Put> putList = new ArrayList<>();
@@ -416,7 +419,8 @@ public class HBaseRepository implements  Serializable {
             }else  if (tableName.equals(MqConstant.vehicleAdasInfo)){
                 for (T value : values) {
                     Adasinfo adasinfo = (Adasinfo) value;
-                    Put put = new Put((String.valueOf(Long.MAX_VALUE-System.currentTimeMillis())+adasinfo.getVehicleID()).getBytes());
+
+                    Put put = new Put((String.valueOf(Long.MAX_VALUE-System.currentTimeMillis())+adasinfo.getVehicleID()).getBytes(), adasinfo.getGpsTime().getTime());
                     List<String> attribute = BeanUtils.getAttribute(Adasinfo.class);
 
                     List<Put> putList = new ArrayList<>();
@@ -452,7 +456,7 @@ public class HBaseRepository implements  Serializable {
             }else  if (tableName.equals(MqConstant.vehicleDmsInfo)){
                 for (T value : values) {
                     DmsInfo dmsInfo = (DmsInfo) value;
-                    Put put = new Put((String.valueOf(Long.MAX_VALUE-System.currentTimeMillis())+dmsInfo.getVehicleID()).getBytes());
+                    Put put = new Put((String.valueOf(Long.MAX_VALUE-System.currentTimeMillis())+dmsInfo.getVehicleID()).getBytes(),System.currentTimeMillis());
                     List<String> attribute = BeanUtils.getAttribute(DmsInfo.class);
 
                     List<Put> putList = new ArrayList<>();

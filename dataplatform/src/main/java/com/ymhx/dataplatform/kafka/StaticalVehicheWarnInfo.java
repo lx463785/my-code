@@ -41,19 +41,12 @@ public class StaticalVehicheWarnInfo implements Serializable {
     /**
      * 每个车队的风险系数
      */
-    public void getWarnCoefficient() throws IOException, SQLException, ParseException {
+    public void getWarnCoefficient(Integer integer,JavaSparkContext context) throws IOException, SQLException, ParseException {
 
-        SparkConf conf = new SparkConf().setAppName("warn")
-                .setMaster("local[2]")
-                //序列化
-                .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
-        conf.set("spark.driver.allowMultipleContexts", "true");
-        JavaStreamingContext jsc = new JavaStreamingContext(conf, Durations.seconds(30));
-        JavaSparkContext context = jsc.sparkContext();
+
         //获取所有车辆的terminal_id
         List<String> list = new JdbcUtils().getterminalID();
-        for (int i = 0; i < 225; i++) {
-            int integer = i;
+
             for (String vehicleid : list) {
 
 
@@ -66,7 +59,7 @@ public class StaticalVehicheWarnInfo implements Serializable {
 
                 //hbase配置
                 Configuration hconf = HBaseConfiguration.create();
-                hconf.set("hbase.zookeeper.quorum", "192.168.0.95:2181,192.168.0.46:2181,192.168.0.202:2181");
+                hconf.set("hbase.zookeeper.quorum", "192.168.10.117:2181");
                 hconf.set("hbase.zookeeper.property.clientPort", "2181");
                 hconf.set(TableInputFormat.INPUT_TABLE, "vehicle_alarm_adas");
 
@@ -100,21 +93,21 @@ public class StaticalVehicheWarnInfo implements Serializable {
                             //根据速度判断是否为前碰撞还是低速前碰撞 计算相应系数
                             if (speed >= Double.parseDouble(configlist.get(15))) {   //.......前碰撞
                                 marking += 1 * Double.parseDouble(configlist.get(3));
-                                alarmType=ADASNewEnum.FCW.getVaule();
+                                alarmType = ADASNewEnum.FCW.getVaule();
                             } else if (speed < Double.parseDouble(configlist.get(15)) && speed >= Double.parseDouble(configlist.get(16))) {
                                 marking += 1 * Double.parseDouble(configlist.get(4));
-                                alarmType=ADASNewEnum.FCW.getVaule();
+                                alarmType = ADASNewEnum.FCW.getVaule();
                             } else if (speed >= Double.parseDouble(configlist.get(17))) {  //......低速碰撞
-                                    marking += 1 * Double.parseDouble(configlist.get(6));
-                                alarmType=ADASNewEnum.UFCW.getVaule();
-                                }
-                        }  else if (alarmType == ADASNewEnum.LDWADNLDWR.getVaule()) { //......车道偏移
+                                marking += 1 * Double.parseDouble(configlist.get(6));
+                                alarmType = ADASNewEnum.UFCW.getVaule();
+                            }
+                        } else if (alarmType == ADASNewEnum.LDWADNLDWR.getVaule()) { //......车道偏移
                             if (speed >= Double.parseDouble(configlist.get(18))) {
                                 marking += 1 * Double.parseDouble(configlist.get(7));
-                                alarmType=ADASNewEnum.LDWR.getVaule();
+                                alarmType = ADASNewEnum.LDWR.getVaule();
                             } else {
                                 marking += 1 * Double.parseDouble(configlist.get(8));
-                                alarmType=ADASNewEnum.LDW.getVaule();
+                                alarmType = ADASNewEnum.LDW.getVaule();
                             }
                         } else if (alarmType == ADASNewEnum.PCW.getVaule()) {  //.....行人碰撞
                             marking += 1 * Double.parseDouble(configlist.get(10));
@@ -213,7 +206,7 @@ public class StaticalVehicheWarnInfo implements Serializable {
                         int vehicleId = Integer.parseInt(vehicleid);
                         DateFormat dateFmt = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
                         //查询是否有该数据
-                        String querysql = "SELECT * from tb_vehicle_report WHERE vehicle_id=? AND record_date>? AND record_date<=? ";
+                        String querysql = "SELECT * from tb_vehicle_report WHERE vehicle_id=? AND record_date>=? AND record_date<? ";
                         querysql = String.format(querysql, vehicleId, DateUtils.getBeforeOneDay(integer).get("startTime"), DateUtils.getBeforeOneDay(integer).get("endTime"));
                         List<String> query = new JdbcUtils().query(querysql, vehicleId, DateUtils.getcurrentTime().get("startTime"), DateUtils.getcurrentTime().get("endTime"));
                         if (query.size() == 0) {
@@ -236,9 +229,47 @@ public class StaticalVehicheWarnInfo implements Serializable {
                         }
                     }
                 });
+            }
 
+    }
+
+    public void getAlarmTypeNum(Integer integer ,JavaSparkContext context) throws ParseException, IOException, SQLException {
+
+        //获取所有车辆的terminal_id
+        List<String> list = new JdbcUtils().getterminalID();
+
+            for (String vehicleid : list) {
+
+
+                //查询配置信息
+                List<String> configlist = new JdbcUtils().getconfiglist();
+                //查询终端id为terminalId的车辆信息
+                List<String> run = new JdbcUtils().getTerminalData(vehicleid);
+                //倒序
+                String reverseId = StringUtils.reverse((run.get(6)));
+
+                //hbase配置
+                Configuration hconf = HBaseConfiguration.create();
+                hconf.set("hbase.zookeeper.quorum", "192.168.0.95:2181,192.168.0.46:2181,192.168.0.202:2181");
+                hconf.set("hbase.zookeeper.property.clientPort", "2181");
+                hconf.set(TableInputFormat.INPUT_TABLE, "vehicle_alarm_adas");
+
+
+                Scan scan = new Scan();
+                scan.setStartRow(String.format("%s%s", reverseId, DateUtils.getBeforeOneDay(integer).get("startTime")).getBytes());
+                scan.setStopRow(String.format("%s%s", reverseId, DateUtils.getBeforeOneDay(integer).get("endTime")).getBytes());
+                hconf.set(TableInputFormat.SCAN, TableMapReduceUtil.convertScanToString(scan));
+                hconf.set(TableInputFormat.SCAN_ROW_START, String.format("%s%s", reverseId, DateUtils.getBeforeOneDay(integer).get("startTime")));
+                hconf.set(TableInputFormat.SCAN_ROW_STOP, String.format("%s%s", reverseId, DateUtils.getBeforeOneDay(integer).get("endTime")));
+
+
+                //设置标识符
+                //获取符合查询的hbase相应信息
+                JavaPairRDD<ImmutableBytesWritable, Result> javaPairRDD = context.newAPIHadoopRDD(hconf, TableInputFormat
+                        .class, ImmutableBytesWritable.class, Result.class);
+                long count = javaPairRDD.count();
                 //合并数据
-                JavaPairRDD<String, String> newrdd = javaPairRDD.mapToPair(new PairFunction<Tuple2<ImmutableBytesWritable, Result>, String, Integer>() {
+                javaPairRDD.mapToPair(new PairFunction<Tuple2<ImmutableBytesWritable, Result>, String, Integer>() {
                     @Override
                     public Tuple2<String, Integer> call(Tuple2<ImmutableBytesWritable, Result> immutableBytesWritableResultTuple2) throws Exception {
                         Result result = immutableBytesWritableResultTuple2._2();
@@ -252,16 +283,16 @@ public class StaticalVehicheWarnInfo implements Serializable {
 
                         if (alarmType == ADASNewEnum.FCWANDUFCW.getVaule()) {  //.....前向碰撞
                             //根据速度判断是否为前碰撞还是低速前碰撞 计算相应系数
-                             if (speed >= Double.parseDouble(configlist.get(17))) {
-                                alarmType=ADASNewEnum.UFCW.getVaule();         //...... 前碰撞
-                            }else {
-                                alarmType=ADASNewEnum.FCW.getVaule();          //......低速碰撞
-                            }
-                        }  else if (alarmType == ADASNewEnum.LDWADNLDWR.getVaule()) { //......车道偏移
-                            if (speed >= Double.parseDouble(configlist.get(18))) {
-                                alarmType=ADASNewEnum.LDWR.getVaule();
+                            if (speed >= Double.parseDouble(configlist.get(17))) {
+                                alarmType = ADASNewEnum.UFCW.getVaule();         //...... 前碰撞
                             } else {
-                                alarmType=ADASNewEnum.LDW.getVaule();
+                                alarmType = ADASNewEnum.FCW.getVaule();          //......低速碰撞
+                            }
+                        } else if (alarmType == ADASNewEnum.LDWADNLDWR.getVaule()) { //......车道偏移
+                            if (speed >= Double.parseDouble(configlist.get(18))) {
+                                alarmType = ADASNewEnum.LDWR.getVaule();
+                            } else {
+                                alarmType = ADASNewEnum.LDW.getVaule();
                             }
                         }
                         return new Tuple2<>(vehicleId + "_" + alarmType, 1);
@@ -278,20 +309,18 @@ public class StaticalVehicheWarnInfo implements Serializable {
                         List<String> newlist = Arrays.asList(stringIntegerTuple2._1.split("_"));
                         return new Tuple2<>(newlist.get(0), newlist.get(1) + "_" + stringIntegerTuple2._2);
                     }
-                });
-
-                JavaPairRDD<String, Tuple2<String, String>> join = pairRDD.join(newrdd);
-                join.foreach(new VoidFunction<Tuple2<String, Tuple2<String, String>>>() {
+                }).foreach(new VoidFunction<Tuple2<String, String>>() {
                     @Override
-                    public void call(Tuple2<String, Tuple2<String, String>> stringTuple2Tuple2) throws Exception {
-                        System.out.println(stringTuple2Tuple2._2._1);
-                        System.out.println(stringTuple2Tuple2._1);
-                        List<String> newlist = Arrays.asList(stringTuple2Tuple2._2._2.split("_"));
+                    public void call(Tuple2<String, String> stringTuple2) throws Exception {
+                        System.out.println(stringTuple2._2);
+                        System.out.println(stringTuple2._1);
+                        DateFormat dateFmt = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+                        List<String> newlist = Arrays.asList(stringTuple2._2.split("_"));
                         int type = Integer.parseInt(newlist.get(0));
                         int counts = Integer.parseInt(newlist.get(1));
 
                         //插入报警信息
-                        String sql = "update tb_vehicle_report set %s=?  where vehicle_id=? and create_time>? and create_time<? ";
+                        String sql = "update tb_vehicle_report set %s=?  where vehicle_id=? and record_date>=? and record_date<? ";
                         String name = "";
                         if (ADASNewEnum.FCW.getVaule() == type) {  //前碰撞
                             name = "fwc";
@@ -315,147 +344,140 @@ public class StaticalVehicheWarnInfo implements Serializable {
                             name = "ffw";
                         } else if (ADASNewEnum.Road_Risking.getVaule() == type) {
                             name = "road_risking";
-                        }else if (ADASNewEnum.Active_Capture.getVaule() == type){
-                            name="active_capture";
+                        } else if (ADASNewEnum.Active_Capture.getVaule() == type) {
+                            name = "active_capture";
                         }
                         if (StringUtils.isNotBlank(name)) {
                             sql = String.format(sql, name);
-                            new JdbcUtils().save(sql, String.valueOf(counts), vehicleid, DateUtils.getcurrentTime().get("startTime"), DateUtils.getcurrentTime().get("endTime"));
+                            new JdbcUtils().save(sql, String.valueOf(counts), vehicleid, dateFmt.format(DateUtils.getBeforeOneDay(integer).get("startTime")), dateFmt.format(DateUtils.getBeforeOneDay(integer).get("endTime")));
                         }
                     }
 
                 });
 
+
             }
-        }
+
     }
 
     /**
      * 计算里程
      */
-    public void getMileageCount() throws SQLException, ParseException, IOException {
-        SparkConf conf = new SparkConf().setAppName("warn")
-                .setMaster("local[2]")
-                //序列化
-                .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
-
-        JavaSparkContext context = new JavaSparkContext(conf);
+    public void getMileageCount(Integer integer,JavaSparkContext context) throws SQLException, ParseException, IOException {
 
 
         //获取所有车辆的terminal_id
         List<String> list = new JdbcUtils().getterminalID();
-        for (int i = 0; i < 225; i++) {
-            int integer = i;
-        for (String vehicleid : list) {
-            //倒序
 
-            String reverseId = StringUtils.reverse((vehicleid));
-            reverseId = String.format("%-14s", reverseId).replace(' ', '0');
-            //hbase配置
-            Configuration hconf = HBaseConfiguration.create();
-            hconf.set("hbase.zookeeper.quorum", "192.168.0.95:2181,192.168.0.46:2181,192.168.0.202:2181");
-            hconf.set("hbase.zookeeper.property.clientPort", "2181");
-            hconf.set(TableInputFormat.INPUT_TABLE, "tb_vehicle_gps");
+            for (String vehicleid : list) {
+                //倒序
 
-            Scan scan = new Scan();
-            Long startTime = DateUtils.getBeforeOneDay(integer).get("startTime");
-            Long endTime = DateUtils.getBeforeOneDay(integer).get("endTime");
-            scan.setStartRow(String.format("%s%s", reverseId, startTime).getBytes());
-            scan.setStopRow(String.format("%s%s", reverseId, endTime).getBytes());
-            hconf.set(TableInputFormat.SCAN, TableMapReduceUtil.convertScanToString(scan));
-            hconf.set(TableInputFormat.SCAN_ROW_START, String.format("%s%s", reverseId, startTime));
-            hconf.set(TableInputFormat.SCAN_ROW_STOP, String.format("%s%s", reverseId, endTime));
+                String reverseId = StringUtils.reverse((vehicleid));
+                reverseId = String.format("%-14s", reverseId).replace(' ', '0');
+                //hbase配置
+                Configuration hconf = HBaseConfiguration.create();
+                hconf.set("hbase.zookeeper.quorum", "192.168.0.95:2181,192.168.0.46:2181,192.168.0.202:2181");
+                hconf.set("hbase.zookeeper.property.clientPort", "2181");
+                hconf.set(TableInputFormat.INPUT_TABLE, "tb_vehicle_gps");
 
-            //查询终端id为terminalId的车辆信息
-            List<String> run = new JdbcUtils().getTerminalData(vehicleid);
-            //设置标识符
-            //获取符合查询的hbase相应信息
-            JavaPairRDD<ImmutableBytesWritable, Result> javaPairRDD = context.newAPIHadoopRDD(hconf, TableInputFormat.class, ImmutableBytesWritable.class, Result.class);
-            long count = javaPairRDD.count();
-            //统计公里数
-            JavaPairRDD<String, Double> mileagerdd = javaPairRDD.mapToPair(new PairFunction<Tuple2<ImmutableBytesWritable, Result>, Integer, String>() {
-                @Override
-                public Tuple2<Integer, String> call(Tuple2<ImmutableBytesWritable, Result> immutableBytesWritableResultTuple2) throws Exception {
-                    Result result = immutableBytesWritableResultTuple2._2();
-                    DateFormat dateFmt = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-                    //获取每个车辆的终端ID
-                    int terminalId = Bytes.toInt(result.getValue("gps".getBytes(), "terminalId".getBytes()));
+                Scan scan = new Scan();
+                Long startTime = DateUtils.getBeforeOneDay(integer).get("startTime");
+                Long endTime = DateUtils.getBeforeOneDay(integer).get("endTime");
+                scan.setStartRow(String.format("%s%s", reverseId, startTime).getBytes());
+                scan.setStopRow(String.format("%s%s", reverseId, endTime).getBytes());
+                hconf.set(TableInputFormat.SCAN, TableMapReduceUtil.convertScanToString(scan));
+                hconf.set(TableInputFormat.SCAN_ROW_START, String.format("%s%s", reverseId, startTime));
+                hconf.set(TableInputFormat.SCAN_ROW_STOP, String.format("%s%s", reverseId, endTime));
 
-                    //获取车辆的公里数
-                    String mileage = Bytes.toString(result.getValue("gps".getBytes(), "mileage".getBytes()));
-                    //获取时间
-                    String warningTime = Bytes.toString(result.getValue("gps".getBytes(), "gpsTime".getBytes()));
-                    Date date = new Date(warningTime);
-                    warningTime = dateFmt.format(date);
-                    return new Tuple2<>(Integer.parseInt(vehicleid), terminalId + "_" + warningTime + "_" + mileage);
-                }
-            }).groupByKey().sortByKey(false).mapToPair(new PairFunction<Tuple2<Integer, Iterable<String>>, String, Double>() {
-                @Override
-                public Tuple2<String, Double> call(Tuple2<Integer, Iterable<String>> integerIterableTuple2) throws Exception {
-                    Iterable<String> strings = integerIterableTuple2._2();
-                    ArrayList<String> newArrayList = Lists.newArrayList(strings);
-                    Collections.sort(newArrayList, new Comparator<String>() {
-                        @Override
-                        public int compare(String o1, String o2) {
-                            List<String> newlist = Arrays.asList(o1.split("_"));
-                            List<String> oldlist = Arrays.asList(o2.split("_"));
-                            if (Integer.parseInt(newlist.get(0)) >= Integer.parseInt(oldlist.get(0))) {
-                                return 0;
-                            }
-                            return 1;
-                        }
-                    });
-                    Collections.sort(newArrayList, new Comparator<String>() {
-                        @Override
-                        public int compare(String o1, String o2) {
-                            List<String> newlist = Arrays.asList(o1.split("_"));
-                            List<String> oldlist = Arrays.asList(o2.split("_"));
-                            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-                            try {
-                                Date newdate = sdf.parse(newlist.get(1));
-                                Date olddate = sdf.parse(oldlist.get(1));
-                                if (newdate.getTime() >= olddate.getTime()) {
+                //查询终端id为terminalId的车辆信息
+                List<String> run = new JdbcUtils().getTerminalData(vehicleid);
+                //设置标识符
+                //获取符合查询的hbase相应信息
+                JavaPairRDD<ImmutableBytesWritable, Result> javaPairRDD = context.newAPIHadoopRDD(hconf, TableInputFormat.class, ImmutableBytesWritable.class, Result.class);
+                long count = javaPairRDD.count();
+                //统计公里数
+                JavaPairRDD<String, Double> mileagerdd = javaPairRDD.mapToPair(new PairFunction<Tuple2<ImmutableBytesWritable, Result>, Integer, String>() {
+                    @Override
+                    public Tuple2<Integer, String> call(Tuple2<ImmutableBytesWritable, Result> immutableBytesWritableResultTuple2) throws Exception {
+                        Result result = immutableBytesWritableResultTuple2._2();
+                        DateFormat dateFmt = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+                        //获取每个车辆的终端ID
+                        int terminalId = Bytes.toInt(result.getValue("gps".getBytes(), "terminalId".getBytes()));
+
+                        //获取车辆的公里数
+                        String mileage = Bytes.toString(result.getValue("gps".getBytes(), "mileage".getBytes()));
+                        //获取时间
+                        String warningTime = Bytes.toString(result.getValue("gps".getBytes(), "gpsTime".getBytes()));
+                        Date date = new Date(warningTime);
+                        warningTime = dateFmt.format(date);
+                        return new Tuple2<>(Integer.parseInt(vehicleid), terminalId + "_" + warningTime + "_" + mileage);
+                    }
+                }).groupByKey().sortByKey(false).mapToPair(new PairFunction<Tuple2<Integer, Iterable<String>>, String, Double>() {
+                    @Override
+                    public Tuple2<String, Double> call(Tuple2<Integer, Iterable<String>> integerIterableTuple2) throws Exception {
+                        Iterable<String> strings = integerIterableTuple2._2();
+                        ArrayList<String> newArrayList = Lists.newArrayList(strings);
+                        Collections.sort(newArrayList, new Comparator<String>() {
+                            @Override
+                            public int compare(String o1, String o2) {
+                                List<String> newlist = Arrays.asList(o1.split("_"));
+                                List<String> oldlist = Arrays.asList(o2.split("_"));
+                                if (Integer.parseInt(newlist.get(0)) >= Integer.parseInt(oldlist.get(0))) {
                                     return 0;
                                 }
-                            } catch (ParseException e) {
-                                e.printStackTrace();
+                                return 1;
                             }
+                        });
+                        Collections.sort(newArrayList, new Comparator<String>() {
+                            @Override
+                            public int compare(String o1, String o2) {
+                                List<String> newlist = Arrays.asList(o1.split("_"));
+                                List<String> oldlist = Arrays.asList(o2.split("_"));
+                                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+                                try {
+                                    Date newdate = sdf.parse(newlist.get(1));
+                                    Date olddate = sdf.parse(oldlist.get(1));
+                                    if (newdate.getTime() >= olddate.getTime()) {
+                                        return 0;
+                                    }
+                                } catch (ParseException e) {
+                                    e.printStackTrace();
+                                }
 
-                            return 1;
-                        }
-                    });
-                    //得到所有的值
-                    List<Double> doubles = new ArrayList<>();
-                    for (String s : newArrayList) {
-                        List<String> list1 = Arrays.asList(s.split("_"));
-                        double value = Double.parseDouble(list1.get(2));
-                        doubles.add(value);
-                    }
-                    Double odd = 0.00;
-                    for (int i = 0; i < doubles.size(); i++) {
-                        if (i > 0) {
-                            double value = doubles.get(i) - doubles.get(i - 1);
-                            if (value >= 100) {
-                                value = 0.00;
+                                return 1;
                             }
-                            odd += value;
+                        });
+                        //得到所有的值
+                        List<Double> doubles = new ArrayList<>();
+                        for (String s : newArrayList) {
+                            List<String> list1 = Arrays.asList(s.split("_"));
+                            double value = Double.parseDouble(list1.get(2));
+                            doubles.add(value);
                         }
+                        Double odd = 0.00;
+                        for (int i = 0; i < doubles.size(); i++) {
+                            if (i > 0) {
+                                double value = doubles.get(i) - doubles.get(i - 1);
+                                if (value >= 100) {
+                                    value = 0.00;
+                                }
+                                odd += value;
+                            }
+                        }
+                        return new Tuple2<>(integerIterableTuple2._1.toString(), odd);
                     }
-                    return new Tuple2<>(integerIterableTuple2._1.toString(), odd);
-                }
-            });
-            mileagerdd.foreach(new VoidFunction<Tuple2<String, Double>>() {
-                @Override
-                public void call(Tuple2<String, Double> stringDoubleTuple2) throws Exception {
-                    DateFormat dateFmt = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-                    //格式化日期
-                    String start = dateFmt.format(startTime);
-                    String end = dateFmt.format(endTime);
-                    String sql = "update tb_vehicle_report set mileage=?  where vehicle_id=? and record_date>=? and record_date<? ";
-                    new JdbcUtils().save(sql, String.format("%.2f", stringDoubleTuple2._2), stringDoubleTuple2._1, start, end);
-                }
-            });
-        }
-        }
+                });
+                mileagerdd.foreach(new VoidFunction<Tuple2<String, Double>>() {
+                    @Override
+                    public void call(Tuple2<String, Double> stringDoubleTuple2) throws Exception {
+                        DateFormat dateFmt = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+                        //格式化日期
+                        String start = dateFmt.format(startTime);
+                        String end = dateFmt.format(endTime);
+                        String sql = "update tb_vehicle_report set mileage=?  where vehicle_id=? and record_date>=? and record_date<? ";
+                        new JdbcUtils().save(sql, String.format("%.2f", stringDoubleTuple2._2), stringDoubleTuple2._1, start, end);
+                    }
+                });
+            }
     }
 }
